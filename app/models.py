@@ -23,7 +23,7 @@ def utc_now():
 class Role(Base):
     __tablename__ = "roles"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(50), unique=True, nullable=False)
     description = Column(String(255), nullable=True)
     created_at = Column(
@@ -36,7 +36,7 @@ class Role(Base):
 class User(Base):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     username = Column(String(100), unique=True, nullable=False)
     email = Column(String(255), unique=True, nullable=False)
     hashed_password = Column(String(255), nullable=False)
@@ -56,7 +56,7 @@ class User(Base):
 class Asset(Base):
     __tablename__ = "assets"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(150), nullable=False)
     asset_type = Column(String(50), nullable=False)
     hostname = Column(String(255), nullable=True)
@@ -92,7 +92,7 @@ class Software(Base):
         ),
     )
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
     version = Column(String(100), nullable=False)
     vendor = Column(String(150), nullable=True)
@@ -107,7 +107,7 @@ class Software(Base):
 class Vulnerability(Base):
     __tablename__ = "vulnerabilities"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     asset_id = Column(
         Integer,
         ForeignKey("assets.id"),
@@ -155,7 +155,7 @@ class Vulnerability(Base):
 class RemediationTask(Base):
     __tablename__ = "remediation_tasks"
 
-    id = Column(Integer, primary_key=True, index=True)
+    id = Column(Integer, primary_key=True)
     vulnerability_id = Column(
         Integer,
         ForeignKey("vulnerabilities.id"),
@@ -192,4 +192,3 @@ class RemediationTask(Base):
     )
 
 
-    

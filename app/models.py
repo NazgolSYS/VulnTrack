@@ -192,3 +192,245 @@ class RemediationTask(Base):
     )
 
 
+class Scan(Base):
+    __tablename__ = "scans"
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(150), nullable=False)
+    scan_type = Column(String(50), nullable=False)
+    status = Column(
+        String(30),
+        default="pending",
+        nullable=False,
+    )
+    started_by = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+    summary = Column(Text, nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class AssetSoftware(Base):
+    __tablename__ = "asset_software"
+
+    __table_args__ = (
+        UniqueConstraint(
+            "asset_id",
+            "software_id",
+            name="uq_asset_software",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True)
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id"),
+        nullable=False,
+    )
+    software_id = Column(
+        Integer,
+        ForeignKey("software.id"),
+        nullable=False,
+    )
+    installed_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_seen_at = Column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    action = Column(String(100), nullable=False)
+    entity_type = Column(String(100), nullable=False)
+    entity_id = Column(Integer, nullable=True)
+    details = Column(Text, nullable=True)
+    ip_address = Column(String(45), nullable=True)
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+        index=True,
+    )
+
+
+class VulnerabilityHistory(Base):
+    __tablename__ = "vulnerability_history"
+
+    id = Column(Integer, primary_key=True)
+    vulnerability_id = Column(
+        Integer,
+        ForeignKey("vulnerabilities.id"),
+        nullable=False,
+    )
+    changed_by = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+    old_status = Column(String(30), nullable=True)
+    new_status = Column(String(30), nullable=False)
+    comment = Column(Text, nullable=True)
+    changed_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id = Column(Integer, primary_key=True)
+
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=False,
+    )
+
+    vulnerability_id = Column(
+        Integer,
+        ForeignKey("vulnerabilities.id"),
+        nullable=True,
+    )
+
+    remediation_task_id = Column(
+        Integer,
+        ForeignKey("remediation_tasks.id"),
+        nullable=True,
+    )
+
+    content = Column(Text, nullable=False)
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    updated_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        onupdate=utc_now,
+        nullable=False,
+    )
+
+
+class Finding(Base):
+    __tablename__ = "findings"
+
+    id = Column(Integer, primary_key=True)
+
+    scan_id = Column(
+        Integer,
+        ForeignKey("scans.id"),
+        nullable=False,
+    )
+
+    asset_id = Column(
+        Integer,
+        ForeignKey("assets.id"),
+        nullable=False,
+    )
+
+    vulnerability_id = Column(
+        Integer,
+        ForeignKey("vulnerabilities.id"),
+        nullable=True,
+    )
+
+    title = Column(String(255), nullable=False)
+    description = Column(Text, nullable=True)
+    severity = Column(String(20), nullable=False)
+    status = Column(
+        String(30),
+        default="open",
+        nullable=False,
+    )
+
+    evidence = Column(Text, nullable=True)
+
+    first_detected_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    last_detected_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+
+class RiskAssessment(Base):
+    __tablename__ = "risk_assessments"
+
+    id = Column(Integer, primary_key=True)
+
+    vulnerability_id = Column(
+        Integer,
+        ForeignKey("vulnerabilities.id"),
+        nullable=False,
+    )
+
+    assessed_by = Column(
+        Integer,
+        ForeignKey("users.id"),
+        nullable=True,
+    )
+
+    likelihood = Column(Integer, nullable=False)
+    impact = Column(Integer, nullable=False)
+    risk_score = Column(Float, nullable=False)
+
+    risk_level = Column(
+        String(20),
+        nullable=False,
+    )
+
+    justification = Column(Text, nullable=True)
+    mitigation_recommendation = Column(Text, nullable=True)
+
+    assessed_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+
+    created_at = Column(
+        DateTime(timezone=True),
+        default=utc_now,
+        nullable=False,
+    )
+

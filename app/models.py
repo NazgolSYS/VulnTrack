@@ -11,6 +11,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    CheckConstraint,
 )
 
 from app.database import Base
@@ -395,6 +396,33 @@ class Finding(Base):
 
 class RiskAssessment(Base):
     __tablename__ = "risk_assessments"
+
+    __table_args__ = (
+        CheckConstraint(
+            "likelihood BETWEEN 1 AND 5",
+            name="ck_risk_likelihood_range",
+        ),
+        CheckConstraint(
+            "impact BETWEEN 1 AND 5",
+            name="ck_risk_impact_range",
+        ),
+        CheckConstraint(
+            "risk_score = likelihood * impact",
+            name="ck_risk_score_calculation",
+        ),
+        CheckConstraint(
+            """
+            (risk_score <= 4 AND risk_level = 'low')
+            OR (risk_score > 4 AND risk_score <= 9
+                AND risk_level = 'medium')
+            OR (risk_score > 9 AND risk_score <= 15
+                AND risk_level = 'high')
+            OR (risk_score > 15 AND risk_score <= 25
+                AND risk_level = 'critical')
+            """,
+            name="ck_risk_level_matches_score",
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
 

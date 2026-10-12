@@ -4,6 +4,8 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.routers import risk_assessments
+
 
 app = FastAPI(
     title="VulnTrack API",
@@ -27,3 +29,5 @@ def health(db: Session = Depends(get_db)):
         "status": "ok",
         "database": "connected"
     }
+
+app.include_router(risk_assessments.router)

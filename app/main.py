@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.routers import risk_assessments, roles
+from app.routers import risk_assessments, roles, users
 
 
 app = FastAPI(
@@ -32,3 +32,4 @@ def health(db: Session = Depends(get_db)):
 
 app.include_router(risk_assessments.router)
 app.include_router(roles.router)
+app.include_router(users.router)

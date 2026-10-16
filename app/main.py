@@ -4,7 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.routers import risk_assessments, roles, users, assets, software
+from app.routers import risk_assessments, roles, users, assets, software, vulnerabilities 
 
 
 app = FastAPI(
@@ -35,3 +35,4 @@ app.include_router(roles.router)
 app.include_router(users.router)
 app.include_router(assets.router)
 app.include_router(software.router)
+app.include_router(vulnerabilities.router)

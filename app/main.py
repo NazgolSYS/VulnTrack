@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.routers import(
 risk_assessments, roles, users, assets, software, vulnerabilities, remediation_tasks,
-asset_software
+asset_software, scans
 ) 
 
 
@@ -41,3 +41,4 @@ app.include_router(software.router)
 app.include_router(vulnerabilities.router)
 app.include_router(remediation_tasks.router)
 app.include_router(asset_software.router)
+app.include_router(scans.router)

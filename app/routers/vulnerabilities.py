@@ -12,6 +12,10 @@ from app.schemas.vulnerability import (
 )
 from app.services import vulnerability_service
 
+from app.schemas.vulnerability_status import (
+    VulnerabilityStatusChange
+)
+
 
 router = APIRouter(
     prefix="/vulnerabilities",
@@ -199,3 +203,19 @@ def delete_vulnerability(
                 "reference it. Remove or reassign those records first."
             ),
         )
+
+
+@router.patch(
+    "/{vulnerability_id}/status",
+    tags=["Vulnerabilities"],
+)
+def change_vulnerability_status(
+    vulnerability_id: int,
+    change_data: VulnerabilityStatusChange,
+    db: Session = Depends(get_db),
+):
+    return vulnerability_service.change_vulnerability_status(
+        db,
+        vulnerability_id,
+        change_data,
+    )

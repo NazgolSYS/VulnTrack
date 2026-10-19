@@ -8,6 +8,7 @@ from app.schemas.finding import (
     FindingUpdate,
 )
 from app.services import finding_service
+from app.schemas.finding_vulnerability import FindingVulnerabilityLink
 
 
 router = APIRouter(
@@ -100,4 +101,20 @@ def edit_finding(
         db,
         finding_id,
         finding_data,
+    )
+
+
+@router.patch(
+    "/{finding_id}/link-vulnerability",
+    response_model=FindingResponse,
+)
+def link_finding_to_vulnerability(
+    finding_id: int,
+    link_data: FindingVulnerabilityLink,
+    db: Session = Depends(get_db),
+):
+    return finding_service.link_finding_to_vulnerability(
+        db,
+        finding_id,
+        link_data,
     )

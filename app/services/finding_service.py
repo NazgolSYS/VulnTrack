@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app import models
 from app.schemas.finding import FindingCreate, FindingUpdate
+from app.schemas.finding_vulnerability import FindingVulnerabilityLink
 
 
 def validate_finding_references(
@@ -200,6 +201,71 @@ def update_finding(
     try:
         db.commit()
         db.refresh(finding)
+    except Exception:
+        db.rollback()
+        raise
+
+    return finding
+
+
+def link_finding_to_vulnerability(
+    db: Session,
+    finding_id: int,
+    link_data: FindingVulnerabilityLink,
+):
+    # Find the finding
+    finding = (
+        db.query(models.Finding)
+        .filter(models.Finding.id == finding_id)
+        .first()
+    )
+
+    if finding is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Finding not found.",
+        )
+
+    # Find the vulnerability
+    vulnerability = (
+        db.query(models.Vulnerability)
+        .filter(
+            models.Vulnerability.id
+            == link_data.vulnerability_id
+        )
+        .first()
+    )
+
+    if vulnerability is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vulnerability not found.",
+        )
+
+    # Make sure the finding and vulnerability
+    # belong to the same asset.
+    if vulnerability.asset_id != finding.asset_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "The vulnerability does not belong to "
+                "the same asset as the finding."
+            ),
+        )
+
+    # Check whether it is already linked.
+    if finding.vulnerability_id == vulnerability.id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Finding is already linked to this vulnerability.",
+        )
+
+    try:
+        finding.vulnerability_id = vulnerability.id
+
+        db.commit()
+        db.refresh(finding)
+
     except Exception:
         db.rollback()
         raise

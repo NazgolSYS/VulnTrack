@@ -7,9 +7,11 @@ from app.schemas.risk_assessment import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
 )
+from app.services import risk_assessment_service
 from app.services.risk_assessment_service import (
     create_risk_assessment,
 )
+
 
 router = APIRouter(
     prefix="/risk-assessments",

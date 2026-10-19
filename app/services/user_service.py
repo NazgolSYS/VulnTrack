@@ -4,6 +4,7 @@ from pwdlib import PasswordHash
 
 from app.models import User
 from app.schemas.user import UserCreate, UserUpdate
+from app.services.auth_service import hash_password
 
 
 password_hash = PasswordHash.recommended()
@@ -13,7 +14,7 @@ def create_user(db: Session, user_data: UserCreate):
     user = User(
         username=user_data.username,
         email=str(user_data.email),
-        hashed_password=password_hash.hash(user_data.password),
+        hashed_password=hash_password(user_data.password),
         role_id=user_data.role_id,
     )
 

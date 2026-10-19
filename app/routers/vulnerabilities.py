@@ -11,11 +11,14 @@ from app.schemas.vulnerability import (
     VulnerabilityUpdate,
 )
 from app.services import vulnerability_service
-
 from app.schemas.vulnerability_status import (
     VulnerabilityStatusChange
 )
 
+from app.schemas.vulnerability_priority import (
+    PrioritizedVulnerabilityResponse,
+)
+from app.services import vulnerability_priority_service
 
 router = APIRouter(
     prefix="/vulnerabilities",
@@ -89,6 +92,19 @@ def get_vulnerabilities(
     db: Session = Depends(get_db),
 ):
     return vulnerability_service.get_vulnerabilities(db)
+
+
+@router.get(
+    "/prioritized",
+    response_model=list[PrioritizedVulnerabilityResponse],
+)
+def get_prioritized_vulnerabilities(
+    db: Session = Depends(get_db),
+):
+    return (
+        vulnerability_priority_service
+        .get_prioritized_vulnerabilities(db)
+    )
 
 
 @router.get(

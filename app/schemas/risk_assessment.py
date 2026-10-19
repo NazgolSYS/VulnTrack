@@ -28,3 +28,5 @@ class RiskAssessmentResponse(BaseModel):
     mitigation_recommendation: str | None
     assessed_at: datetime
     created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

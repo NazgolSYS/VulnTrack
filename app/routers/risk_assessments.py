@@ -52,3 +52,33 @@ def create_assessment(
         db=db,
         assessment_data=assessment_data,
     )
+
+
+@router.get(
+    "/vulnerability/{vulnerability_id}/latest",
+    response_model=RiskAssessmentResponse,
+)
+def get_latest_risk_assessment_for_vulnerability(
+    vulnerability_id: int,
+    db: Session = Depends(get_db),
+):
+    return risk_assessment_service.get_latest_risk_assessment_for_vulnerability(
+        db,
+        vulnerability_id,
+    )
+
+
+@router.get(
+    "/vulnerability/{vulnerability_id}",
+    response_model=list[RiskAssessmentResponse],
+)
+def get_risk_assessments_for_vulnerability(
+    vulnerability_id: int,
+    db: Session = Depends(get_db),
+):
+    return risk_assessment_service.get_risk_assessments_for_vulnerability(
+        db,
+        vulnerability_id,
+    )
+
+

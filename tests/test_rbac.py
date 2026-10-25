@@ -17,6 +17,13 @@ from app.services import (
     finding_service,
     remediation_task_service,
     risk_assessment_service,
+    audit_log_service,
+    comment_service,
+    vulnerability_history_service,
+    role_service,
+    software_service,
+    scan_service,
+    asset_software_service,
 )
 
 
@@ -531,6 +538,526 @@ def test_unauthenticated_user_cannot_access_protected_endpoints(
     assert response.status_code == 401
 
 
+# Comments RBAC tests
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_comments(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can read comments."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        comment_service,
+        "get_all_comments",
+        lambda db, skip, limit: [],
+    )
+
+    response = client.get("/comments/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_viewer_cannot_create_comment(client):
+    """A Viewer cannot create comments."""
+
+    set_test_user(VIEWER)
+
+    response = client.post("/comments/", json={})
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_edit_comment(client):
+    """A Viewer cannot edit comments."""
+
+    set_test_user(VIEWER)
+
+    response = client.patch("/comments/1", json={})
+
+    assert response.status_code == 403
+
+
+# Vulnerability History RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_vulnerability_history(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can read vulnerability history."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        vulnerability_history_service,
+        "get_all_vulnerability_history",
+        lambda db, skip, limit: [],
+    )
+
+    response = client.get("/vulnerability-history/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_viewer_cannot_create_vulnerability_history(client):
+    """A Viewer cannot create vulnerability history records."""
+
+    set_test_user(VIEWER)
+
+    response = client.post(
+        "/vulnerability-history/",
+        json={},
+    )
+
+    assert response.status_code == 403
+
+
+
+# Roles RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_roles(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can list roles."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        role_service,
+        "get_roles",
+        lambda db: [],
+    )
+
+    response = client.get("/roles/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [SECURITY_ANALYST, VIEWER],
+)
+def test_non_admin_users_cannot_create_roles(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Only Administrators can create roles."""
+
+    set_test_user(role_name)
+
+    response = client.post(
+        "/roles/",
+        json={"name": "RBAC Test Role"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_update_role(client):
+    """A Viewer cannot update roles."""
+
+    set_test_user(VIEWER)
+
+    response = client.put(
+        "/roles/999999",
+        json={"name": "Updated Test Role"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_security_analyst_cannot_delete_role(client):
+    """A Security Analyst cannot delete roles."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    response = client.delete("/roles/999999")
+
+    assert response.status_code == 403
+
+
+
+
+# Software RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_software(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can list software."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        software_service,
+        "get_software_list",
+        lambda db: [],
+    )
+
+    response = client.get("/software/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_create_software(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Analysts can create software."""
+
+    set_test_user(role_name)
+
+    # Configure the mocked database so the duplicate check
+    # finds no existing software record.
+    from app.database import get_db
+
+    mock_db = app.dependency_overrides[get_db]()
+    mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    created_software = SimpleNamespace(
+        id=1,
+        name="RBAC Test Software",
+        version="1.0",
+        vendor="Test Vendor",
+        description="Software created for an RBAC test.",
+        created_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        software_service,
+        "create_software",
+        lambda db, software_data: created_software,
+    )
+
+    response = client.post(
+        "/software/",
+        json={
+            "name": "RBAC Test Software",
+            "version": "1.0",
+            "vendor": "Test Vendor",
+            "description": "Software created for an RBAC test.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["id"] == 1
+
+
+def test_viewer_cannot_create_software(client):
+    """A Viewer cannot create software."""
+
+    set_test_user(VIEWER)
+
+    response = client.post(
+        "/software/",
+        json={
+            "name": "Unauthorized Software",
+            "version": "1.0",
+            "vendor": "Test Vendor",
+        },
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_update_software(client):
+    """A Viewer cannot update software."""
+
+    set_test_user(VIEWER)
+
+    response = client.put(
+        "/software/1",
+        json={"name": "Unauthorized Update"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_delete_software(client):
+    """A Viewer cannot delete software."""
+
+    set_test_user(VIEWER)
+
+    response = client.delete("/software/1")
+
+    assert response.status_code == 403
+
+
+
+# Scans RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_scans(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can list scans."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        scan_service,
+        "get_scans",
+        lambda db: [],
+    )
+
+    response = client.get("/scans/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_viewer_cannot_create_scan(client):
+    """A Viewer cannot create scans."""
+
+    set_test_user(VIEWER)
+
+    response = client.post(
+        "/scans/",
+        json={},
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_update_scan(client):
+    """A Viewer cannot update scans."""
+
+    set_test_user(VIEWER)
+
+    response = client.put(
+        "/scans/1",
+        json={},
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_delete_scan(client):
+    """A Viewer cannot delete scans."""
+
+    set_test_user(VIEWER)
+
+    response = client.delete("/scans/1")
+
+    assert response.status_code == 403
+
+
+
+# Asset-Software RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_asset_software(
+    client,
+    monkeypatch,
+    role_name,
+):
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        asset_software_service,
+        "get_asset_software_list",
+        lambda db: [],
+    )
+
+    response = client.get("/asset-software/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_viewer_cannot_create_asset_software(client):
+    set_test_user(VIEWER)
+
+    response = client.post(
+        "/asset-software/",
+        json={},
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_update_asset_software(client):
+    set_test_user(VIEWER)
+
+    response = client.put(
+        "/asset-software/1",
+        json={},
+    )
+
+    assert response.status_code == 403
+
+
+def test_viewer_cannot_delete_asset_software(client):
+    set_test_user(VIEWER)
+
+    response = client.delete("/asset-software/1")
+
+    assert response.status_code == 403
+
+
+
+# Audit Logs RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_audit_logs(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can list audit logs."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "get_audit_logs",
+        lambda db: [],
+    )
+
+    response = client.get("/audit-logs/")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_create_audit_log(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can create audit logs."""
+
+    set_test_user(role_name)
+
+    created_audit_log = SimpleNamespace(
+        id=1,
+        user_id=1,
+        action="RBAC test",
+        entity_type="vulnerability",
+        entity_id=1,
+        details="Audit log created for an RBAC test.",
+        ip_address=None,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "create_audit_log",
+        lambda db, audit_log_data: created_audit_log,
+    )
+
+    monkeypatch.setattr(
+        "app.routers.audit_logs.validate_user",
+        lambda db, user_id: None,
+    )
+
+    response = client.post(
+        "/audit-logs/",
+        json={
+            "user_id": 1,
+            "action": "RBAC test",
+            "entity_type": "vulnerability",
+            "entity_id": 1,
+            "details": "Audit log created for an RBAC test.",
+            "ip_address": None,
+        },
+    )
+
+    if response.status_code != 201:
+        print("Status:", response.status_code)
+        print("Response:", response.json())
+
+    assert response.status_code == 201
+    assert response.json()["id"] == 1
+    assert response.json()["action"] == "RBAC test"
+    assert response.json()["entity_type"] == "vulnerability"
+
+
+
+def test_viewer_cannot_create_audit_log(client):
+    """Viewers cannot create audit logs."""
+
+    set_test_user(VIEWER)
+
+    response = client.post(
+        "/audit-logs/",
+        json={},
+    )
+
+    assert response.status_code == 403
+
+
+def test_unauthenticated_user_cannot_read_audit_logs(client):
+    """Unauthenticated users cannot read audit logs."""
+
+    response = client.get("/audit-logs/")
+
+    assert response.status_code == 401
+
+
+def test_unauthenticated_user_cannot_create_audit_log(client):
+    """Unauthenticated users cannot create audit logs."""
+
+    response = client.post(
+    "/audit-logs/",
+    json={
+        "user_id": 1,
+        "action": "RBAC test",
+        "entity_type": "vulnerability",
+        "entity_id": 1,
+        "details": "Audit log created for an RBAC test.",
+        "ip_address": None,
+        },
+    )
+
+    assert response.status_code == 401
 
 
 

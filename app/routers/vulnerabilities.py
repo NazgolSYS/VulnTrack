@@ -19,6 +19,8 @@ from app.schemas.vulnerability_priority import (
     PrioritizedVulnerabilityResponse,
 )
 from app.services import vulnerability_priority_service
+from app.core.dependencies import get_current_user, require_security_analyst
+
 
 router = APIRouter(
     prefix="/vulnerabilities",
@@ -63,6 +65,7 @@ def validate_references(
 def create_vulnerability(
     vulnerability_data: VulnerabilityCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     validate_references(
         db,
@@ -90,6 +93,7 @@ def create_vulnerability(
 )
 def get_vulnerabilities(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return vulnerability_service.get_vulnerabilities(db)
 
@@ -100,6 +104,7 @@ def get_vulnerabilities(
 )
 def get_prioritized_vulnerabilities(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return (
         vulnerability_priority_service
@@ -114,6 +119,7 @@ def get_prioritized_vulnerabilities(
 def get_vulnerability(
     vulnerability_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     vulnerability = vulnerability_service.get_vulnerability(
         db,
@@ -137,6 +143,7 @@ def update_vulnerability(
     vulnerability_id: int,
     vulnerability_data: VulnerabilityUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     vulnerability = vulnerability_service.get_vulnerability(
         db,
@@ -193,6 +200,7 @@ def update_vulnerability(
 def delete_vulnerability(
     vulnerability_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     vulnerability = vulnerability_service.get_vulnerability(
         db,
@@ -229,6 +237,7 @@ def change_vulnerability_status(
     vulnerability_id: int,
     change_data: VulnerabilityStatusChange,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return vulnerability_service.change_vulnerability_status(
         db,

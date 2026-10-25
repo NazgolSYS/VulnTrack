@@ -3,13 +3,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Software
+from app.models import Software, User
 from app.schemas.software import (
     SoftwareCreate,
     SoftwareResponse,
     SoftwareUpdate,
 )
 from app.services import software_service
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -26,6 +27,7 @@ router = APIRouter(
 def create_software(
     software_data: SoftwareCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     existing_software = (
         db.query(Software)
@@ -62,6 +64,7 @@ def create_software(
 )
 def get_software_list(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return software_service.get_software_list(db)
 
@@ -73,6 +76,7 @@ def get_software_list(
 def get_software(
     software_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     software = software_service.get_software(
         db,
@@ -96,6 +100,7 @@ def update_software(
     software_id: int,
     software_data: SoftwareUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     software = software_service.get_software(
         db,
@@ -165,6 +170,7 @@ def update_software(
 def delete_software(
     software_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     software = software_service.get_software(
         db,
@@ -188,4 +194,5 @@ def delete_software(
             status_code=status.HTTP_409_CONFLICT,
             detail="Software cannot be deleted because other records reference it.",
         )
+
     

@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Asset, User
 from app.schemas.asset import AssetCreate, AssetResponse, AssetUpdate
 from app.services import asset_service
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -23,6 +24,7 @@ router = APIRouter(
 def create_asset(
     asset_data: AssetCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     if asset_data.owner_id is not None:
         owner = db.query(User).filter(
@@ -51,6 +53,7 @@ def create_asset(
 )
 def get_assets(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return asset_service.get_assets(db)
 
@@ -62,6 +65,7 @@ def get_assets(
 def get_asset(
     asset_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     asset = asset_service.get_asset(db, asset_id)
 
@@ -82,6 +86,7 @@ def update_asset(
     asset_id: int,
     asset_data: AssetUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     asset = asset_service.get_asset(db, asset_id)
 
@@ -121,6 +126,7 @@ def update_asset(
 def delete_asset(
     asset_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     asset = asset_service.get_asset(db, asset_id)
 

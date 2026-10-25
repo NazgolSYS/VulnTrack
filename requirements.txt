@@ -7,3 +7,4 @@ pydantic
 alembic
 pwdlib
 PyJWT
+pydantic-settings

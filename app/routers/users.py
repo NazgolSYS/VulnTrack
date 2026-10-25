@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models import Role, User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services import user_service
+from app.core.dependencies import get_current_user
 
 
 router = APIRouter(
@@ -57,6 +58,7 @@ def create_user(
 )
 def get_users(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return user_service.get_users(db)
 

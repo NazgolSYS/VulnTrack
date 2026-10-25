@@ -10,7 +10,7 @@ from app.schemas.remediation_task import (
     RemediationTaskUpdate,
 )
 from app.services import remediation_task_service
-
+from app.core.dependencies import get_current_user, require_security_analyst
 
 router = APIRouter(
     prefix="/remediation-tasks",
@@ -57,6 +57,7 @@ def validate_references(
 def create_remediation_task(
     task_data: RemediationTaskCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     validate_references(
         db,
@@ -84,6 +85,7 @@ def create_remediation_task(
 )
 def get_remediation_tasks(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return remediation_task_service.get_remediation_tasks(db)
 
@@ -95,6 +97,7 @@ def get_remediation_tasks(
 def get_remediation_task(
     task_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     task = remediation_task_service.get_remediation_task(
         db,
@@ -118,6 +121,7 @@ def update_remediation_task(
     task_id: int,
     task_data: RemediationTaskUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     task = remediation_task_service.get_remediation_task(
         db,
@@ -172,6 +176,7 @@ def update_remediation_task(
 def delete_remediation_task(
     task_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     task = remediation_task_service.get_remediation_task(
         db,

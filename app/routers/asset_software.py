@@ -3,13 +3,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Asset, AssetSoftware, Software
+from app.models import Asset, AssetSoftware, Software, User
 from app.schemas.asset_software import (
     AssetSoftwareCreate,
     AssetSoftwareResponse,
     AssetSoftwareUpdate,
 )
 from app.services import asset_software_service
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -56,6 +57,7 @@ def validate_references(
 def create_asset_software(
     asset_software_data: AssetSoftwareCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     validate_references(
         db,
@@ -101,6 +103,7 @@ def create_asset_software(
 )
 def get_asset_software_list(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return asset_software_service.get_asset_software_list(db)
 
@@ -112,6 +115,7 @@ def get_asset_software_list(
 def get_asset_software(
     asset_software_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     asset_software = (
         asset_software_service.get_asset_software(
@@ -137,6 +141,7 @@ def update_asset_software(
     asset_software_id: int,
     asset_software_data: AssetSoftwareUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     asset_software = (
         asset_software_service.get_asset_software(
@@ -210,6 +215,7 @@ def update_asset_software(
 def delete_asset_software(
     asset_software_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     asset_software = (
         asset_software_service.get_asset_software(

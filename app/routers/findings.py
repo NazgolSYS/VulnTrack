@@ -9,6 +9,8 @@ from app.schemas.finding import (
 )
 from app.services import finding_service
 from app.schemas.finding_vulnerability import FindingVulnerabilityLink
+from app.models import User
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -25,6 +27,7 @@ router = APIRouter(
 def create_finding(
     finding_data: FindingCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return finding_service.create_finding(db, finding_data)
 
@@ -37,6 +40,7 @@ def read_all_findings(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return finding_service.get_all_findings(db, skip, limit)
 
@@ -50,6 +54,7 @@ def read_findings_for_scan(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return finding_service.get_findings_for_scan(
         db,
@@ -68,6 +73,7 @@ def read_findings_for_asset(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return finding_service.get_findings_for_asset(
         db,
@@ -84,6 +90,7 @@ def read_findings_for_asset(
 def read_finding(
     finding_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return finding_service.get_finding(db, finding_id)
 
@@ -96,6 +103,7 @@ def edit_finding(
     finding_id: int,
     finding_data: FindingUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return finding_service.update_finding(
         db,
@@ -112,6 +120,7 @@ def link_finding_to_vulnerability(
     finding_id: int,
     link_data: FindingVulnerabilityLink,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return finding_service.link_finding_to_vulnerability(
         db,

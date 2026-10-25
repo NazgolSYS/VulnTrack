@@ -8,6 +8,8 @@ from app.schemas.comment import (
     CommentUpdate,
 )
 from app.services import comment_service
+from app.models import User
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -24,6 +26,7 @@ router = APIRouter(
 def create_comment(
     comment_data: CommentCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return comment_service.create_comment(db, comment_data)
 
@@ -36,6 +39,7 @@ def read_all_comments(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return comment_service.get_all_comments(db, skip, limit)
 
@@ -49,6 +53,7 @@ def read_comments_for_vulnerability(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return comment_service.get_comments_for_vulnerability(
         db,
@@ -67,6 +72,7 @@ def read_comments_for_remediation_task(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return comment_service.get_comments_for_remediation_task(
         db,
@@ -83,6 +89,7 @@ def read_comments_for_remediation_task(
 def read_comment(
     comment_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return comment_service.get_comment(db, comment_id)
 
@@ -95,6 +102,7 @@ def edit_comment(
     comment_id: int,
     comment_data: CommentUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return comment_service.update_comment(
         db,

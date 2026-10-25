@@ -10,6 +10,7 @@ from app.schemas.scan import (
     ScanUpdate,
 )
 from app.services import scan_service
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -46,6 +47,7 @@ def validate_started_by(
 def create_scan(
     scan_data: ScanCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     validate_started_by(
         db,
@@ -73,6 +75,7 @@ def create_scan(
 )
 def get_scans(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return scan_service.get_scans(db)
 
@@ -84,6 +87,7 @@ def get_scans(
 def get_scan(
     scan_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     scan = scan_service.get_scan(
         db,
@@ -107,6 +111,7 @@ def update_scan(
     scan_id: int,
     scan_data: ScanUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     scan = scan_service.get_scan(
         db,
@@ -156,6 +161,7 @@ def update_scan(
 def delete_scan(
     scan_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     scan = scan_service.get_scan(
         db,

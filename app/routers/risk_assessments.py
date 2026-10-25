@@ -8,9 +8,8 @@ from app.schemas.risk_assessment import (
     RiskAssessmentResponse,
 )
 from app.services import risk_assessment_service
-from app.services.risk_assessment_service import (
-    create_risk_assessment,
-)
+from app.services.risk_assessment_service import create_risk_assessment
+from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -27,6 +26,7 @@ router = APIRouter(
 def create_assessment(
     assessment_data: RiskAssessmentCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     # Confirm that the vulnerability exists.
     vulnerability = db.get(
@@ -63,6 +63,7 @@ def create_assessment(
 def get_latest_risk_assessment_for_vulnerability(
     vulnerability_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return risk_assessment_service.get_latest_risk_assessment_for_vulnerability(
         db,
@@ -77,6 +78,7 @@ def get_latest_risk_assessment_for_vulnerability(
 def get_risk_assessments_for_vulnerability(
     vulnerability_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return risk_assessment_service.get_risk_assessments_for_vulnerability(
         db,

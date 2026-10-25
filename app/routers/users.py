@@ -7,7 +7,7 @@ from app.database import get_db
 from app.models import Role, User
 from app.schemas.user import UserCreate, UserResponse, UserUpdate
 from app.services import user_service
-from app.core.dependencies import get_current_user
+from app.core.dependencies import require_admin
 
 
 router = APIRouter(
@@ -24,6 +24,7 @@ router = APIRouter(
 def create_user(
     user_data: UserCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     if not db.query(Role).filter(Role.id == user_data.role_id).first():
         raise HTTPException(
@@ -58,7 +59,7 @@ def create_user(
 )
 def get_users(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_admin),
 ):
     return user_service.get_users(db)
 
@@ -70,6 +71,7 @@ def get_users(
 def get_user(
     user_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     user = user_service.get_user(db, user_id)
 
@@ -90,6 +92,7 @@ def update_user(
     user_id: int,
     user_data: UserUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     user = user_service.get_user(db, user_id)
 
@@ -153,6 +156,7 @@ def update_user(
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     user = user_service.get_user(db, user_id)
 

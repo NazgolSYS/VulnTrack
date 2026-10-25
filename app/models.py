@@ -1,6 +1,7 @@
 
 from datetime import datetime, timezone
 
+from sqlalchemy.orm import relationship
 from sqlalchemy import (
     Boolean,
     Column,
@@ -33,6 +34,8 @@ class Role(Base):
         nullable=False,
     )
 
+    users = relationship("User", back_populates="role")
+
 
 class User(Base):
     __tablename__ = "users"
@@ -52,6 +55,8 @@ class User(Base):
         default=utc_now,
         nullable=False,
     )
+
+    role = relationship("Role", back_populates="users")
 
 
 class Asset(Base):

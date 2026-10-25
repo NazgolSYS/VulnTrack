@@ -2,9 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Role
+from app.models import Role, User
 from app.schemas.role import RoleCreate, RoleResponse, RoleUpdate
 from app.services import role_service
+from app.core.dependencies import get_current_user, require_admin
 
 
 router = APIRouter(
@@ -21,6 +22,7 @@ router = APIRouter(
 def create_role(
     role_data: RoleCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     existing_role = (
         db.query(Role)
@@ -43,6 +45,7 @@ def create_role(
 )
 def get_roles(
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     return role_service.get_roles(db)
 
@@ -54,6 +57,7 @@ def get_roles(
 def get_role(
     role_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     role = role_service.get_role(db, role_id)
 
@@ -74,6 +78,7 @@ def update_role(
     role_id: int,
     role_data: RoleUpdate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     role = role_service.get_role(db, role_id)
 
@@ -97,6 +102,7 @@ def update_role(
 def delete_role(
     role_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     role = role_service.get_role(db, role_id)
 
@@ -107,3 +113,5 @@ def delete_role(
         )
 
     role_service.delete_role(db, role)
+
+    

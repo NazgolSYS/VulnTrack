@@ -9,6 +9,7 @@ from app.schemas.audit_log import (
     AuditLogResponse,
 )
 from app.services import audit_log_service
+from app.core.dependencies import require_admin, require_security_analyst
 
 
 router = APIRouter(
@@ -45,6 +46,7 @@ def validate_user(
 def create_audit_log(
     audit_log_data: AuditLogCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
 ):
     validate_user(
         db,
@@ -72,6 +74,7 @@ def create_audit_log(
 )
 def get_audit_logs(
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     return audit_log_service.get_audit_logs(db)
 
@@ -83,6 +86,7 @@ def get_audit_logs(
 def get_audit_log(
     audit_log_id: int,
     db: Session = Depends(get_db),
+    current_user: User = Depends(require_security_analyst),
 ):
     audit_log = audit_log_service.get_audit_log(
         db,
@@ -98,6 +102,13 @@ def get_audit_log(
     return audit_log
 
 
+def deny_audit_log_deletion():
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Audit logs cannot be deleted through the API.",
+    )
+
+
 @router.delete(
     "/{audit_log_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -105,6 +116,7 @@ def get_audit_log(
 def delete_audit_log(
     audit_log_id: int,
     db: Session = Depends(get_db),
+    _denied=Depends(deny_audit_log_deletion),
 ):
     audit_log = audit_log_service.get_audit_log(
         db,
@@ -130,4 +142,7 @@ def delete_audit_log(
             status_code=status.HTTP_409_CONFLICT,
             detail="Audit log could not be deleted because of a database conflict.",
         )
+
+
+    
     

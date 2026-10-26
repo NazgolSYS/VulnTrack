@@ -1,9 +1,92 @@
+import re
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app import models
 from app.schemas.finding import FindingCreate, FindingUpdate
 from app.schemas.finding_vulnerability import FindingVulnerabilityLink
+
+
+CVE_PATTERN = re.compile(
+    r"\bCVE-\d{4}-\d{4,}\b",
+    re.IGNORECASE,
+)
+
+
+def extract_cve_id(finding_data: FindingCreate) -> str | None:
+    """Extract a CVE identifier from existing finding text fields."""
+    text_fields = (
+        finding_data.title,
+        finding_data.description,
+        finding_data.evidence,
+    )
+
+    for value in text_fields:
+        if not value:
+            continue
+
+        match = CVE_PATTERN.search(value)
+        if match:
+            return match.group(0).upper()
+
+    return None
+
+
+def integrate_finding_with_vulnerability(
+    db: Session,
+    finding: models.Finding,
+):
+    """Link a finding to a matching vulnerability or create one."""
+    cve_id = extract_cve_id(
+        FindingCreate(
+            scan_id=finding.scan_id,
+            asset_id=finding.asset_id,
+            vulnerability_id=finding.vulnerability_id,
+            title=finding.title,
+            description=finding.description,
+            severity=finding.severity,
+            status=finding.status,
+            evidence=finding.evidence,
+        )
+    )
+
+    vulnerability = None
+
+    if cve_id:
+        vulnerability = (
+            db.query(models.Vulnerability)
+            .filter(
+                models.Vulnerability.asset_id == finding.asset_id,
+                models.Vulnerability.cve_id.ilike(cve_id),
+            )
+            .first()
+        )
+
+    if vulnerability is None:
+        vulnerability = models.Vulnerability(
+            asset_id=finding.asset_id,
+            title=finding.title,
+            description=finding.description,
+            cve_id=cve_id,
+            severity=finding.severity,
+            status="open",
+            discovered_at=finding.first_detected_at,
+        )
+        db.add(vulnerability)
+        db.flush()
+    else:
+        if vulnerability.status.strip().lower() == "resolved":
+            vulnerability.status = "open"
+
+        if (
+            vulnerability.discovered_at is None
+            or finding.first_detected_at < vulnerability.discovered_at
+        ):
+            vulnerability.discovered_at = finding.first_detected_at
+
+    finding.vulnerability_id = vulnerability.id
+
+    return vulnerability
 
 
 def validate_finding_references(
@@ -34,6 +117,7 @@ def validate_finding_references(
             detail="Asset not found.",
         )
 
+    
     if vulnerability_id is not None:
         vulnerability = (
             db.query(models.Vulnerability)
@@ -42,10 +126,20 @@ def validate_finding_references(
             )
             .first()
         )
+
         if vulnerability is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Vulnerability not found.",
+            )
+
+        if vulnerability.asset_id != asset_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "The vulnerability does not belong to "
+                    "the same asset as the finding."
+                ),
             )
 
 
@@ -64,8 +158,32 @@ def create_finding(
 
     try:
         db.add(finding)
+        db.flush()
+
+        if finding.vulnerability_id is None:
+            integrate_finding_with_vulnerability(db, finding)
+        else:
+            vulnerability = (
+                db.query(models.Vulnerability)
+                .filter(
+                    models.Vulnerability.id == finding.vulnerability_id
+                )
+                .first()
+            )
+
+            if vulnerability is not None:
+                if vulnerability.status.strip().lower() == "resolved":
+                    vulnerability.status = "open"
+
+                if (
+                    vulnerability.discovered_at is None
+                    or finding.first_detected_at < vulnerability.discovered_at
+                ):
+                    vulnerability.discovered_at = finding.first_detected_at
+
         db.commit()
         db.refresh(finding)
+
     except Exception:
         db.rollback()
         raise

@@ -160,6 +160,15 @@ def update_vulnerability(
         exclude_unset=True
     )
 
+    if "status" in update_data:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Vulnerability status must be changed through "
+                "PATCH /vulnerabilities/{vulnerability_id}/status."
+            ),
+        )
+
     asset_id = update_data.get(
         "asset_id",
         vulnerability.asset_id,
@@ -229,10 +238,7 @@ def delete_vulnerability(
         )
 
 
-@router.patch(
-    "/{vulnerability_id}/status",
-    tags=["Vulnerabilities"],
-)
+@router.patch("/{vulnerability_id}/status", tags=["Vulnerabilities"])
 def change_vulnerability_status(
     vulnerability_id: int,
     change_data: VulnerabilityStatusChange,
@@ -240,7 +246,9 @@ def change_vulnerability_status(
     current_user: User = Depends(require_security_analyst),
 ):
     return vulnerability_service.change_vulnerability_status(
-        db,
-        vulnerability_id,
-        change_data,
+        db=db,
+        vulnerability_id=vulnerability_id,
+        change_data=change_data,
+        changed_by=current_user.id,
     )
+

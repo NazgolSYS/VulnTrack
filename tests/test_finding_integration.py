@@ -98,7 +98,20 @@ def test_existing_resolved_vulnerability_is_reused_and_reopened():
         2025, 1, 1, tzinfo=timezone.utc
     )
 
-    db.add.assert_not_called()
+    db.add.assert_called_once()
+
+    history = db.add.call_args.args[0]
+
+    assert isinstance(history, models.VulnerabilityHistory)
+    assert history.vulnerability_id == 10
+    assert history.changed_by is None
+    assert history.old_status == "resolved"
+    assert history.new_status == "open"
+    assert (
+        history.comment
+        == "Automatically reopened because a new scan detected this vulnerability."
+    )
+
     db.flush.assert_not_called()
 
 

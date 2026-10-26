@@ -74,13 +74,32 @@ def integrate_finding_with_vulnerability(
         )
         db.add(vulnerability)
         db.flush()
+
     else:
-        if vulnerability.status.strip().lower() == "resolved":
+        old_status = (vulnerability.status or "").strip().lower()
+
+        if old_status == "resolved":
             vulnerability.status = "open"
+
+            history = models.VulnerabilityHistory(
+                vulnerability_id=vulnerability.id,
+                changed_by=None,
+                old_status="resolved",
+                new_status="open",
+                comment=(
+                    "Automatically reopened because a new scan "
+                    "detected this vulnerability."
+                ),
+            )
+            db.add(history)
 
         if (
             vulnerability.discovered_at is None
-            or finding.first_detected_at < vulnerability.discovered_at
+            or (
+                finding.first_detected_at is not None
+                and finding.first_detected_at
+                < vulnerability.discovered_at
+            )
         ):
             vulnerability.discovered_at = finding.first_detected_at
 

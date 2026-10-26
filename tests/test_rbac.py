@@ -1060,6 +1060,17 @@ def test_unauthenticated_user_cannot_create_audit_log(client):
     assert response.status_code == 401
 
 
+def test_vulnerability_status_cannot_be_changed_through_put(client, monkeypatch):
+    set_test_user(SECURITY_ANALYST)
+
+    response = client.put(
+        "/vulnerabilities/1",
+        json={"status": "resolved"},
+    )
+
+    assert response.status_code == 422
+    assert "PATCH" in response.json()["detail"]
+
 
 
 

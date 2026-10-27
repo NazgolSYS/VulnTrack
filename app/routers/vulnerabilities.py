@@ -1,5 +1,5 @@
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -103,12 +103,23 @@ def get_vulnerabilities(
     response_model=list[PrioritizedVulnerabilityResponse],
 )
 def get_prioritized_vulnerabilities(
+    status_filter: str | None = Query(
+        default=None,
+        alias="status",
+    ),
+    risk_level: str | None = None,
+    severity: str | None = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     return (
         vulnerability_priority_service
-        .get_prioritized_vulnerabilities(db)
+        .get_prioritized_vulnerabilities(
+            db,
+            status=status_filter,
+            risk_level=risk_level,
+            severity=severity,
+        )
     )
 
 

@@ -24,6 +24,7 @@ from app.services import (
     software_service,
     scan_service,
     asset_software_service,
+    vulnerability_priority_service,
 )
 
 
@@ -1072,7 +1073,136 @@ def test_vulnerability_status_cannot_be_changed_through_put(client, monkeypatch)
     assert "PATCH" in response.json()["detail"]
 
 
+# Vulnerability prioritization RBAC tests
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_roles_can_read_prioritized_vulnerabilities(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can read prioritized vulnerabilities."""
+
+    set_test_user(role_name)
+
+    prioritized_data = [
+        {
+            "vulnerability_id": 1,
+            "title": "Prioritized test vulnerability",
+            "cve_id": "CVE-2026-1234",
+            "severity": "high",
+            "status": "open",
+            "asset_id": 1,
+            "risk_score": 12,
+            "risk_level": "high",
+            "assessed_at": None,
+        }
+    ]
+
+    monkeypatch.setattr(
+        vulnerability_priority_service,
+        "get_prioritized_vulnerabilities",
+        lambda db, status=None, risk_level=None, severity=None: (
+            prioritized_data
+        ),
+    )
+
+    response = client.get("/vulnerabilities/prioritized")
+
+    assert response.status_code == 200
+    assert response.json() == prioritized_data
 
 
+def test_unauthenticated_user_cannot_read_prioritized_vulnerabilities(
+    client,
+):
+    """Prioritized vulnerabilities require authentication."""
+
+    response = client.get("/vulnerabilities/prioritized")
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+# Vulnerability prioritization filter API tests
+
+def test_prioritized_endpoint_passes_filters_to_service(
+    client,
+    monkeypatch,
+):
+    set_test_user(SECURITY_ANALYST)
+
+    expected_data = [
+        {
+            "vulnerability_id": 1,
+            "title": "Open high-risk vulnerability",
+            "cve_id": "CVE-2026-1234",
+            "severity": "high",
+            "status": "open",
+            "asset_id": 1,
+            "risk_score": 12,
+            "risk_level": "high",
+            "assessed_at": None,
+        }
+    ]
+
+    def mock_get_prioritized_vulnerabilities(
+        db,
+        status=None,
+        risk_level=None,
+        severity=None,
+    ):
+        assert status == "open"
+        assert risk_level == "high"
+        assert severity == "high"
+        return expected_data
+
+    monkeypatch.setattr(
+        vulnerability_priority_service,
+        "get_prioritized_vulnerabilities",
+        mock_get_prioritized_vulnerabilities,
+    )
+
+    response = client.get(
+        "/vulnerabilities/prioritized",
+        params={
+            "status": "open",
+            "risk_level": "high",
+            "severity": "high",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected_data
+
+
+def test_prioritized_endpoint_filters_are_optional(
+    client,
+    monkeypatch,
+):
+    set_test_user(SECURITY_ANALYST)
+
+    monkeypatch.setattr(
+        vulnerability_priority_service,
+        "get_prioritized_vulnerabilities",
+        lambda db, status=None, risk_level=None, severity=None: [],
+    )
+
+    response = client.get("/vulnerabilities/prioritized")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_prioritized_endpoint_rejects_unauthenticated_user(client):
+    response = client.get(
+        "/vulnerabilities/prioritized",
+        params={"status": "open"},
+    )
+
+    assert response.status_code == 401
 
 

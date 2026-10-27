@@ -1,5 +1,6 @@
-from sqlalchemy.orm import Session
+
 from fastapi import HTTPException, status
+from sqlalchemy.orm import Session
 
 from app import models
 from app.models import RiskAssessment
@@ -10,19 +11,33 @@ from app.services.risk_service import calculate_risk
 def create_risk_assessment(
     db: Session,
     assessment_data: RiskAssessmentCreate,
+    assessed_by: int,
 ) -> RiskAssessment:
-    # Reuse the existing risk calculation function.
+    """Calculate and save a risk assessment."""
+
+    # Confirm that the vulnerability exists.
+    vulnerability = db.get(
+        models.Vulnerability,
+        assessment_data.vulnerability_id,
+    )
+
+    if vulnerability is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Vulnerability not found.",
+        )
+
+    # Calculate the risk using the existing calculation service.
     result = calculate_risk(
         assessment_data.likelihood,
         assessment_data.impact,
     )
 
-    # Create a database record using the calculated results.
     assessment = RiskAssessment(
         vulnerability_id=assessment_data.vulnerability_id,
-        assessed_by=assessment_data.assessed_by,
-        likelihood=assessment_data.likelihood,
-        impact=assessment_data.impact,
+        assessed_by=assessed_by,
+        likelihood=result["likelihood"],
+        impact=result["impact"],
         risk_score=result["risk_score"],
         risk_level=result["risk_level"],
         justification=assessment_data.justification,
@@ -42,16 +57,12 @@ def create_risk_assessment(
         raise
 
 
-from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
-
-from app import models
-
-
 def get_risk_assessments_for_vulnerability(
     db: Session,
     vulnerability_id: int,
 ):
+    """Return all assessments for an existing vulnerability."""
+
     vulnerability = (
         db.query(models.Vulnerability)
         .filter(models.Vulnerability.id == vulnerability_id)
@@ -81,6 +92,8 @@ def get_latest_risk_assessment_for_vulnerability(
     db: Session,
     vulnerability_id: int,
 ):
+    """Return the latest assessment for an existing vulnerability."""
+
     vulnerability = (
         db.query(models.Vulnerability)
         .filter(models.Vulnerability.id == vulnerability_id)

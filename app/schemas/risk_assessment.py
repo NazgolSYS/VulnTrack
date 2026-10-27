@@ -1,3 +1,4 @@
+
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -5,7 +6,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 class RiskAssessmentCreate(BaseModel):
     vulnerability_id: int = Field(gt=0)
-    assessed_by: int = Field(gt=0)
 
     likelihood: int = Field(ge=1, le=5)
     impact: int = Field(ge=1, le=5)
@@ -28,5 +28,3 @@ class RiskAssessmentResponse(BaseModel):
     mitigation_recommendation: str | None
     assessed_at: datetime
     created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)

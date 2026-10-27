@@ -1,15 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import (
+    get_current_user,
+    require_security_analyst,
+)
 from app.database import get_db
-from app.models import User, Vulnerability
+from app.models import User
 from app.schemas.risk_assessment import (
     RiskAssessmentCreate,
     RiskAssessmentResponse,
 )
 from app.services import risk_assessment_service
-from app.services.risk_assessment_service import create_risk_assessment
-from app.core.dependencies import get_current_user, require_security_analyst
 
 
 router = APIRouter(
@@ -28,31 +31,12 @@ def create_assessment(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_security_analyst),
 ):
-    # Confirm that the vulnerability exists.
-    vulnerability = db.get(
-        Vulnerability,
-        assessment_data.vulnerability_id,
-    )
+    """Create a risk assessment for a vulnerability."""
 
-    if vulnerability is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Vulnerability not found",
-        )
-
-    # Confirm that the assessing user exists.
-    user = db.get(User, assessment_data.assessed_by)
-
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="User not found",
-        )
-
-    # Calculate the risk and persist the assessment.
-    return create_risk_assessment(
+    return risk_assessment_service.create_risk_assessment(
         db=db,
         assessment_data=assessment_data,
+        assessed_by=current_user.id,
     )
 
 
@@ -65,9 +49,14 @@ def get_latest_risk_assessment_for_vulnerability(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return risk_assessment_service.get_latest_risk_assessment_for_vulnerability(
-        db,
-        vulnerability_id,
+    """Get the latest assessment for a vulnerability."""
+
+    return (
+        risk_assessment_service
+        .get_latest_risk_assessment_for_vulnerability(
+            db,
+            vulnerability_id,
+        )
     )
 
 
@@ -80,9 +69,12 @@ def get_risk_assessments_for_vulnerability(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return risk_assessment_service.get_risk_assessments_for_vulnerability(
-        db,
-        vulnerability_id,
+    """Get the assessment history for a vulnerability."""
+
+    return (
+        risk_assessment_service
+        .get_risk_assessments_for_vulnerability(
+            db,
+            vulnerability_id,
+        )
     )
-
-

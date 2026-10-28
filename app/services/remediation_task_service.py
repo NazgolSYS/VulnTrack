@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.models import RemediationTask
@@ -5,6 +6,13 @@ from app.schemas.remediation_task import (
     RemediationTaskCreate,
     RemediationTaskUpdate,
 )
+
+
+ALLOWED_STATUS_TRANSITIONS = {
+    "pending": {"in_progress"},
+    "in_progress": {"pending", "completed"},
+    "completed": {"in_progress"},
+}
 
 
 def create_remediation_task(
@@ -50,13 +58,60 @@ def update_remediation_task(
         exclude_unset=True
     )
 
-    for field, value in update_data.items():
-        setattr(task, field, value)
+    if "status" in update_data:
+        old_status = (task.status or "").strip().lower()
+        new_status = update_data["status"].strip().lower()
 
-    db.commit()
-    db.refresh(task)
+        if not new_status:
+            raise HTTPException(
+                status_code=422,
+                detail="The remediation task status cannot be empty.",
+            )
 
-    return task
+        if new_status not in ALLOWED_STATUS_TRANSITIONS:
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Invalid remediation task status. "
+                    "Allowed statuses are: "
+                    "pending, in_progress, completed."
+                ),
+            )
+
+        if old_status == new_status:
+            raise HTTPException(
+                status_code=409,
+                detail="The remediation task already has this status.",
+            )
+
+        allowed_next_statuses = ALLOWED_STATUS_TRANSITIONS.get(
+            old_status,
+            set(),
+        )
+
+        if new_status not in allowed_next_statuses:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Invalid remediation task status transition "
+                    f"from '{old_status}' to '{new_status}'."
+                ),
+            )
+
+        update_data["status"] = new_status
+
+    try:
+        for field, value in update_data.items():
+            setattr(task, field, value)
+
+        db.commit()
+        db.refresh(task)
+
+        return task
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 def delete_remediation_task(
@@ -65,4 +120,3 @@ def delete_remediation_task(
 ):
     db.delete(task)
     db.commit()
-    

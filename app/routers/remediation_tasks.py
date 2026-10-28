@@ -9,7 +9,7 @@ from app.schemas.remediation_task import (
     RemediationTaskResponse,
     RemediationTaskUpdate,
 )
-from app.services import remediation_task_service
+from app.services import audit_log_service, remediation_task_service
 from app.core.dependencies import get_current_user, require_security_analyst
 
 router = APIRouter(
@@ -66,10 +66,26 @@ def create_remediation_task(
     )
 
     try:
-        return remediation_task_service.create_remediation_task(
+        task = remediation_task_service.create_remediation_task(
             db,
             task_data,
+            commit=False,
         )
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action="created",
+            entity_type="remediation_task",
+            entity_id=task.id,
+            details=f"Created remediation task: {task.title}",
+        )
+
+        db.commit()
+        db.refresh(task)
+
+        return task
+
     except IntegrityError:
         db.rollback()
 
@@ -77,6 +93,10 @@ def create_remediation_task(
             status_code=status.HTTP_409_CONFLICT,
             detail="Remediation task could not be created because of a database conflict.",
         )
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get(
@@ -154,12 +174,45 @@ def update_remediation_task(
         assigned_to,
     )
 
+    old_status = task.status
+
     try:
-        return remediation_task_service.update_remediation_task(
+        updated_task = remediation_task_service.update_remediation_task(
             db,
             task,
             task_data,
+            commit=False,
         )
+
+        if (
+            "status" in update_data
+            and old_status != updated_task.status
+        ):
+            action = "status_changed"
+            details = (
+                f"Remediation task status changed "
+                f"from {old_status} to {updated_task.status}"
+            )
+        else:
+            action = "updated"
+            details = (
+                f"Updated remediation task: {updated_task.title}"
+            )
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action=action,
+            entity_type="remediation_task",
+            entity_id=updated_task.id,
+            details=details,
+        )
+
+        db.commit()
+        db.refresh(updated_task)
+
+        return updated_task
+
     except IntegrityError:
         db.rollback()
 
@@ -167,6 +220,10 @@ def update_remediation_task(
             status_code=status.HTTP_409_CONFLICT,
             detail="Remediation task could not be updated because of a database conflict.",
         )
+
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.delete(
@@ -189,11 +246,28 @@ def delete_remediation_task(
             detail="Remediation task not found.",
         )
 
+    # Capture the task details before deleting it.
+    task_title = task.title
+    task_id_value = task.id
+
     try:
         remediation_task_service.delete_remediation_task(
             db,
             task,
+            commit=False,
         )
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action="deleted",
+            entity_type="remediation_task",
+            entity_id=task_id_value,
+            details=f"Deleted remediation task: {task_title}",
+        )
+
+        db.commit()
+
     except IntegrityError:
         db.rollback()
 
@@ -201,4 +275,7 @@ def delete_remediation_task(
             status_code=status.HTTP_409_CONFLICT,
             detail="Remediation task could not be deleted because of a database conflict.",
         )
-    
+
+    except Exception:
+        db.rollback()
+        raise

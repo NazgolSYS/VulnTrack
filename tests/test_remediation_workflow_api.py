@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.core.dependencies import get_current_user
 from app.core.roles import SECURITY_ANALYST
-from app.services import remediation_task_service
+from app.services import audit_log_service, remediation_task_service
 from app.database import get_db
 
 
@@ -21,7 +21,7 @@ def client():
 
     app.dependency_overrides.clear()
 
-    
+
 def make_task(status="pending"):
     return SimpleNamespace(
         id=1,
@@ -83,7 +83,12 @@ def test_api_accepts_allowed_status_transitions(
         validate_references,
     )
 
-    def update_task(db, existing_task, task_data):
+    def update_task(
+    db,
+    existing_task,
+    task_data,
+    commit=True,
+    ):
         existing_task.status = task_data.status.strip().lower()
         return existing_task
 
@@ -162,3 +167,105 @@ def test_api_rejects_invalid_status_transitions(
     )
 
     assert response.status_code == expected_code
+
+
+def test_delete_remediation_task_records_audit_event(
+    client,
+    analyst_user,
+    monkeypatch,
+):
+    task = make_task()
+    mock_db = app.dependency_overrides[get_db]()
+
+    monkeypatch.setattr(
+        remediation_task_service,
+        "get_remediation_task",
+        lambda db, task_id: task,
+    )
+
+    deleted = {}
+
+    def delete_task(db, existing_task, commit=True):
+        deleted["task"] = existing_task
+        deleted["commit"] = commit
+
+    monkeypatch.setattr(
+        remediation_task_service,
+        "delete_remediation_task",
+        delete_task,
+    )
+
+    audit_events = []
+
+    def record_audit_event(db, **kwargs):
+        audit_events.append(kwargs)
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        record_audit_event,
+    )
+
+    response = client.delete("/remediation-tasks/1")
+
+    assert response.status_code == 204
+    assert deleted["task"] is task
+    assert deleted["commit"] is False
+
+    assert audit_events == [
+        {
+            "user_id": analyst_user.id,
+            "action": "deleted",
+            "entity_type": "remediation_task",
+            "entity_id": task.id,
+            "details": f"Deleted remediation task: {task.title}",
+        }
+    ]
+
+    mock_db.commit.assert_called_once()
+    mock_db.rollback.assert_not_called()
+
+
+def test_delete_remediation_task_rolls_back_if_audit_fails(
+    client,
+    analyst_user,
+    monkeypatch,
+):
+    task = make_task()
+    mock_db = app.dependency_overrides[get_db]()
+
+    monkeypatch.setattr(
+        remediation_task_service,
+        "get_remediation_task",
+        lambda db, task_id: task,
+    )
+
+    deleted = {}
+
+    def delete_task(db, existing_task, commit=True):
+        deleted["task"] = existing_task
+        deleted["commit"] = commit
+
+    monkeypatch.setattr(
+        remediation_task_service,
+        "delete_remediation_task",
+        delete_task,
+    )
+
+    def fail_audit(db, **kwargs):
+        raise RuntimeError("Audit logging failed")
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        fail_audit,
+    )
+
+    with pytest.raises(RuntimeError, match="Audit logging failed"):
+        client.delete("/remediation-tasks/1")
+
+    assert deleted["task"] is task
+    assert deleted["commit"] is False
+
+    mock_db.commit.assert_not_called()
+    mock_db.rollback.assert_called_once()

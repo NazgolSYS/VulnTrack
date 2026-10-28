@@ -18,14 +18,19 @@ ALLOWED_STATUS_TRANSITIONS = {
 def create_remediation_task(
     db: Session,
     task_data: RemediationTaskCreate,
+    commit: bool = True,
 ):
     task = RemediationTask(
         **task_data.model_dump()
     )
 
     db.add(task)
-    db.commit()
-    db.refresh(task)
+
+    if commit:
+        db.commit()
+        db.refresh(task)
+    else:
+        db.flush()
 
     return task
 
@@ -53,6 +58,7 @@ def update_remediation_task(
     db: Session,
     task: RemediationTask,
     task_data: RemediationTaskUpdate,
+    commit: bool = True,
 ):
     update_data = task_data.model_dump(
         exclude_unset=True
@@ -104,8 +110,11 @@ def update_remediation_task(
         for field, value in update_data.items():
             setattr(task, field, value)
 
-        db.commit()
-        db.refresh(task)
+        if commit:
+            db.commit()
+            db.refresh(task)
+        else:
+            db.flush()
 
         return task
 
@@ -117,6 +126,11 @@ def update_remediation_task(
 def delete_remediation_task(
     db: Session,
     task: RemediationTask,
+    commit: bool = True,
 ):
     db.delete(task)
-    db.commit()
+
+    if commit:
+        db.commit()
+    else:
+        db.flush()

@@ -5,6 +5,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.services.remediation_task_service import (
+    create_remediation_task,
     update_remediation_task,
 )
 
@@ -124,3 +125,85 @@ def test_database_error_rolls_back_update():
         )
 
     db.rollback.assert_called_once()
+
+
+def test_update_with_commit_false_flushes_without_committing():
+    db = MagicMock()
+    task = make_task()
+
+    result = update_remediation_task(
+        db,
+        task,
+        make_update_data(title="Apply security patch"),
+        commit=False,
+    )
+
+    assert result.title == "Apply security patch"
+    db.flush.assert_called_once()
+    db.commit.assert_not_called()
+    db.refresh.assert_not_called()
+    db.rollback.assert_not_called()
+
+
+def test_flush_error_rolls_back_update():
+    db = MagicMock()
+    task = make_task()
+    db.flush.side_effect = Exception("Flush failed")
+
+    with pytest.raises(Exception, match="Flush failed"):
+        update_remediation_task(
+            db,
+            task,
+            make_update_data(title="Apply security patch"),
+            commit=False,
+        )
+
+    db.flush.assert_called_once()
+    db.commit.assert_not_called()
+    db.rollback.assert_called_once()
+
+
+def test_delete_with_commit_false_flushes_without_committing():
+    from app.services.remediation_task_service import (
+        delete_remediation_task,
+    )
+
+    db = MagicMock()
+    task = make_task()
+
+    delete_remediation_task(
+        db,
+        task,
+        commit=False,
+    )
+
+    db.delete.assert_called_once_with(task)
+    db.flush.assert_called_once()
+    db.commit.assert_not_called()
+
+
+def test_create_with_commit_false_flushes_without_committing():
+    db = MagicMock()
+
+    task_data = SimpleNamespace(
+        model_dump=lambda: {
+            "vulnerability_id": 10,
+            "title": "Fix vulnerable software",
+            "description": "Update the affected package",
+            "status": "pending",
+            "priority": "medium",
+            "assigned_to": 2,
+            "due_date": None,
+        }
+    )
+
+    result = create_remediation_task(
+        db,
+        task_data,
+        commit=False,
+    )
+
+    db.add.assert_called_once_with(result)
+    db.flush.assert_called_once()
+    db.commit.assert_not_called()
+    db.refresh.assert_not_called()

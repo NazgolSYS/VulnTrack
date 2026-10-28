@@ -33,6 +33,13 @@ def client(monkeypatch):
     """Create a test client without accessing the real database."""
 
     mock_db = MagicMock()
+    monkeypatch.setattr(
+        __import__(__name__),
+        "_test_mock_db",
+        mock_db,
+        raising=False,
+    )
+
 
     app.dependency_overrides[get_db] = lambda: mock_db
 
@@ -247,10 +254,11 @@ def test_create_vulnerability_records_audit_event(
         lambda db, asset_id, assigned_to, created_by=None: None,
     )
 
+    audit_mock = MagicMock()
     monkeypatch.setattr(
         audit_log_service,
         "record_audit_event",
-        MagicMock(),
+        audit_mock,
     )
 
     response = client.post(
@@ -270,7 +278,7 @@ def test_create_vulnerability_records_audit_event(
 
     assert response.status_code == 201
 
-    audit_call = audit_log_service.record_audit_event.call_args
+    audit_call = audit_mock.call_args
     assert audit_call.args[0] is not None
     assert audit_call.kwargs["user_id"] == 1
     assert audit_call.kwargs["action"] == "created"
@@ -279,6 +287,74 @@ def test_create_vulnerability_records_audit_event(
     assert audit_call.kwargs["details"] == (
         "Created vulnerability: Audit Test Vulnerability"
     )
+
+
+def test_create_vulnerability_rolls_back_when_audit_logging_fails(
+    client,
+    monkeypatch,
+):
+    """A failed audit log causes creation to fail and roll back."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    mock_db = MagicMock()
+    app.dependency_overrides[get_db] = lambda: mock_db
+
+    created_vulnerability = SimpleNamespace(
+        id=42,
+        asset_id=1,
+        title="Audit Failure Test",
+        description="Testing rollback on audit failure.",
+        cve_id="CVE-2026-0042",
+        severity="High",
+        status="open",
+        cvss_score=8.5,
+        assigned_to=None,
+        created_by=1,
+        discovered_at=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "create_vulnerability",
+        lambda db, vulnerability_data, commit=True: created_vulnerability,
+    )
+
+    monkeypatch.setattr(
+        "app.routers.vulnerabilities.validate_references",
+        lambda db, asset_id, assigned_to, created_by=None: None,
+    )
+
+    def fail_audit_logging(*args, **kwargs):
+        raise RuntimeError("Simulated audit logging failure")
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        fail_audit_logging,
+    )
+
+    with TestClient(app, raise_server_exceptions=False) as test_client:
+        response = test_client.post(
+            "/vulnerabilities/",
+            json={
+                "asset_id": 1,
+                "title": "Audit Failure Test",
+                "description": "Testing rollback on audit failure.",
+                "cve_id": "CVE-2026-0042",
+                "severity": "High",
+                "cvss_score": 8.5,
+                "status": "open",
+                "assigned_to": None,
+                "created_by": 1,
+            },
+        )
+
+    assert response.status_code == 500
+    mock_db.rollback.assert_called_once()
 
 
 def test_update_vulnerability_records_audit_event(

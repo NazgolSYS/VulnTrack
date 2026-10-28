@@ -182,7 +182,7 @@ def test_admin_and_analyst_can_create_vulnerability(
     monkeypatch.setattr(
         vulnerability_service,
         "create_vulnerability",
-        lambda db, vulnerability_data: created_vulnerability,
+        lambda db, vulnerability_data, commit=True: created_vulnerability,
     )
 
     monkeypatch.setattr(
@@ -209,6 +209,272 @@ def test_admin_and_analyst_can_create_vulnerability(
 
     assert response.status_code == 201
     assert response.json()["id"] == 1
+
+
+def test_create_vulnerability_records_audit_event(
+    client,
+    monkeypatch,
+):
+    """Creating a vulnerability records an audit event."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    created_vulnerability = SimpleNamespace(
+        id=42,
+        asset_id=1,
+        title="Audit Test Vulnerability",
+        description="Testing automatic audit logging.",
+        cve_id="CVE-2026-0042",
+        severity="High",
+        status="open",
+        cvss_score=8.5,
+        assigned_to=None,
+        created_by=1,
+        discovered_at=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "create_vulnerability",
+        lambda db, vulnerability_data, commit=True: created_vulnerability,
+    )
+
+    monkeypatch.setattr(
+        "app.routers.vulnerabilities.validate_references",
+        lambda db, asset_id, assigned_to, created_by=None: None,
+    )
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.post(
+        "/vulnerabilities/",
+        json={
+            "asset_id": 1,
+            "title": "Audit Test Vulnerability",
+            "description": "Testing automatic audit logging.",
+            "cve_id": "CVE-2026-0042",
+            "severity": "High",
+            "cvss_score": 8.5,
+            "status": "open",
+            "assigned_to": None,
+            "created_by": 1,
+        },
+    )
+
+    assert response.status_code == 201
+
+    audit_call = audit_log_service.record_audit_event.call_args
+    assert audit_call.args[0] is not None
+    assert audit_call.kwargs["user_id"] == 1
+    assert audit_call.kwargs["action"] == "created"
+    assert audit_call.kwargs["entity_type"] == "vulnerability"
+    assert audit_call.kwargs["entity_id"] == 42
+    assert audit_call.kwargs["details"] == (
+        "Created vulnerability: Audit Test Vulnerability"
+    )
+
+
+def test_update_vulnerability_records_audit_event(
+    client,
+    monkeypatch,
+):
+    """Updating a vulnerability records an audit event."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    existing_vulnerability = SimpleNamespace(
+        id=42,
+        asset_id=1,
+        title="Original Vulnerability",
+        description="Original description.",
+        cve_id="CVE-2026-0042",
+        severity="High",
+        status="open",
+        cvss_score=8.5,
+        assigned_to=None,
+        created_by=1,
+        discovered_at=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    updated_vulnerability = SimpleNamespace(
+        id=42,
+        asset_id=1,
+        title="Updated Audit Test Vulnerability",
+        description="Updated description.",
+        cve_id="CVE-2026-0042",
+        severity="High",
+        status="open",
+        cvss_score=8.5,
+        assigned_to=None,
+        created_by=1,
+        discovered_at=None,
+        due_date=None,
+        created_at=existing_vulnerability.created_at,
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "get_vulnerability",
+        lambda db, vulnerability_id: existing_vulnerability,
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "update_vulnerability",
+        lambda db, vulnerability, vulnerability_data, commit=True:
+            updated_vulnerability,
+    )
+
+    monkeypatch.setattr(
+        "app.routers.vulnerabilities.validate_references",
+        lambda db, asset_id, assigned_to, created_by=None: None,
+    )
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.put(
+        "/vulnerabilities/42",
+        json={
+            "title": "Updated Audit Test Vulnerability",
+        },
+    )
+
+    assert response.status_code == 200
+
+    audit_call = audit_log_service.record_audit_event.call_args
+    assert audit_call.args[0] is not None
+    assert audit_call.kwargs["user_id"] == 1
+    assert audit_call.kwargs["action"] == "updated"
+    assert audit_call.kwargs["entity_type"] == "vulnerability"
+    assert audit_call.kwargs["entity_id"] == 42
+    assert audit_call.kwargs["details"] == (
+        "Updated vulnerability: Updated Audit Test Vulnerability"
+    )
+
+
+def test_delete_vulnerability_records_audit_event(
+    client,
+    monkeypatch,
+):
+    """Deleting a vulnerability records an audit event."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    vulnerability = SimpleNamespace(
+        id=42,
+        asset_id=1,
+        title="Audit Test Vulnerability",
+        description="Testing automatic audit logging.",
+        cve_id="CVE-2026-0042",
+        severity="High",
+        status="open",
+        cvss_score=8.5,
+        assigned_to=None,
+        created_by=1,
+        discovered_at=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "get_vulnerability",
+        lambda db, vulnerability_id: vulnerability,
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "delete_vulnerability",
+        lambda db, vulnerability, commit=True: None,
+    )
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.delete("/vulnerabilities/42")
+
+    assert response.status_code == 204
+
+    audit_call = audit_log_service.record_audit_event.call_args
+    assert audit_call.args[0] is not None
+    assert audit_call.kwargs["user_id"] == 1
+    assert audit_call.kwargs["action"] == "deleted"
+    assert audit_call.kwargs["entity_type"] == "vulnerability"
+    assert audit_call.kwargs["entity_id"] == 42
+    assert audit_call.kwargs["details"] == (
+        "Deleted vulnerability: Audit Test Vulnerability"
+    )
+
+
+def test_change_vulnerability_status_records_audit_event(
+    client,
+    monkeypatch,
+):
+    """Changing vulnerability status records an audit event."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    vulnerability = SimpleNamespace(
+        id=42,
+        title="Audit Test Vulnerability",
+        status="resolved",
+    )
+
+    history = SimpleNamespace(
+        old_status="open",
+        new_status="resolved",
+    )
+
+    monkeypatch.setattr(
+        vulnerability_service,
+        "change_vulnerability_status",
+        lambda db, vulnerability_id, change_data, changed_by, commit=True: {
+            "vulnerability": vulnerability,
+            "history": history,
+        },
+    )
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.patch(
+        "/vulnerabilities/42/status",
+        json={"new_status": "resolved"},
+    )
+
+    assert response.status_code == 200
+
+    audit_call = audit_log_service.record_audit_event.call_args
+    assert audit_call.args[0] is not None
+    assert audit_call.kwargs["user_id"] == 1
+    assert audit_call.kwargs["action"] == "status_changed"
+    assert audit_call.kwargs["entity_type"] == "vulnerability"
+    assert audit_call.kwargs["entity_id"] == 42
+    assert audit_call.kwargs["details"] == (
+        "Vulnerability status changed from open to resolved"
+    )
 
 
 def test_viewer_cannot_create_vulnerability(client):
@@ -290,7 +556,7 @@ def test_admin_and_analyst_can_update_vulnerability(
     monkeypatch.setattr(
         vulnerability_service,
         "update_vulnerability",
-        lambda db, vulnerability, vulnerability_data: updated_vulnerability,
+        lambda db, vulnerability, vulnerability_data, commit=True: updated_vulnerability,
     )
 
     monkeypatch.setattr(

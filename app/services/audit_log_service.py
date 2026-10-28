@@ -47,4 +47,29 @@ def delete_audit_log(
     db.delete(audit_log)
     db.commit()
 
-   
+
+def record_audit_event(
+    db: Session,
+    *,
+    user_id: int | None,
+    action: str,
+    entity_type: str,
+    entity_id: int | None = None,
+    details: str | None = None,
+    ip_address: str | None = None,
+):
+    audit_log = AuditLog(
+        user_id=user_id,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        details=details,
+        ip_address=ip_address,
+    )
+
+    db.add(audit_log)
+    db.flush()
+
+    return audit_log
+
+ 

@@ -10,7 +10,11 @@ from app.schemas.vulnerability import (
     VulnerabilityResponse,
     VulnerabilityUpdate,
 )
-from app.services import vulnerability_service
+from app.services import (
+    vulnerability_service, 
+    vulnerability_priority_service,
+    audit_log_service,
+)    
 from app.schemas.vulnerability_status import (
     VulnerabilityStatusChange
 )
@@ -18,7 +22,6 @@ from app.schemas.vulnerability_status import (
 from app.schemas.vulnerability_priority import (
     PrioritizedVulnerabilityResponse,
 )
-from app.services import vulnerability_priority_service
 from app.core.dependencies import get_current_user, require_security_analyst
 
 
@@ -75,16 +78,34 @@ def create_vulnerability(
     )
 
     try:
-        return vulnerability_service.create_vulnerability(
-            db,
-            vulnerability_data,
+        vulnerability = vulnerability_service.create_vulnerability(
+        db,
+        vulnerability_data,
+        commit=False,
         )
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action="created",
+            entity_type="vulnerability",
+            entity_id=vulnerability.id,
+            details=f"Created vulnerability: {vulnerability.title}",
+        )
+
+        db.commit()
+
+        return vulnerability
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Vulnerability could not be created because of a database conflict.",
+            detail="Vulnerability or audit log could not be created because of a database conflict.",
         )
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get(
@@ -198,19 +219,37 @@ def update_vulnerability(
         assigned_to,
         created_by,
     )
-
+    
     try:
-        return vulnerability_service.update_vulnerability(
+        updated_vulnerability = vulnerability_service.update_vulnerability(
             db,
             vulnerability,
             vulnerability_data,
+            commit=False,
         )
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action="updated",
+            entity_type="vulnerability",
+            entity_id=updated_vulnerability.id,
+            details=f"Updated vulnerability: {updated_vulnerability.title}",
+        )
+
+        db.commit()
+
+        return updated_vulnerability
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="Vulnerability could not be updated because of a database conflict.",
+            detail="Vulnerability or audit log could not be updated because of a database conflict.",
         )
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.delete(
@@ -232,21 +271,40 @@ def delete_vulnerability(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Vulnerability not found.",
         )
-
+    
     try:
+        audit_details = f"Deleted vulnerability: {vulnerability.title}"
+        vulnerability_id = vulnerability.id
+
         vulnerability_service.delete_vulnerability(
             db,
             vulnerability,
+            commit=False,
         )
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action="deleted",
+            entity_type="vulnerability",
+            entity_id=vulnerability_id,
+            details=audit_details,
+        )
+
+        db.commit()
+
     except IntegrityError:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=(
                 "Vulnerability cannot be deleted because other records "
-                "reference it. Remove or reassign those records first."
+                "reference it, or an audit log could not be created."
             ),
         )
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.patch("/{vulnerability_id}/status", tags=["Vulnerabilities"])
@@ -256,10 +314,37 @@ def change_vulnerability_status(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_security_analyst),
 ):
-    return vulnerability_service.change_vulnerability_status(
-        db=db,
-        vulnerability_id=vulnerability_id,
-        change_data=change_data,
-        changed_by=current_user.id,
-    )
+    
+    try:
+        result = vulnerability_service.change_vulnerability_status(
+            db=db,
+            vulnerability_id=vulnerability_id,
+            change_data=change_data,
+            changed_by=current_user.id,
+            commit=False,
+        )
+
+        vulnerability = result["vulnerability"]
+        history = result["history"]
+
+        audit_log_service.record_audit_event(
+            db,
+            user_id=current_user.id,
+            action="status_changed",
+            entity_type="vulnerability",
+            entity_id=vulnerability.id,
+            details=(
+                f"Vulnerability status changed from "
+                f"{history.old_status} to {history.new_status}"
+            ),
+        )
+
+        db.commit()
+        return result
+
+    except Exception:
+        db.rollback()
+        raise
+
+
 

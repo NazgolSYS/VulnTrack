@@ -232,3 +232,17 @@ def test_login_whitespace_only_username_returns_422(client):
     )
 
     assert response.status_code == 422
+
+
+def test_login_excessively_long_password_returns_validation_error(client):
+    """Excessively long password inputs are rejected."""
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": "test_user",
+            "password": "a" * 100_000,
+        },
+    )
+
+    assert response.status_code == 422

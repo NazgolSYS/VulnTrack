@@ -6,7 +6,7 @@ from pydantic import BaseModel, StringConstraints
 
 NonEmptyString = Annotated[
     str,
-    StringConstraints(min_length=1),
+    StringConstraints(min_length=1, max_length=1024),
 ]
 
 NonBlankUsername = Annotated[

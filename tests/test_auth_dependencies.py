@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -15,7 +16,7 @@ from app.core.dependencies import (
     require_viewer,
 )
 from app.core.roles import ADMINISTRATOR, SECURITY_ANALYST, VIEWER
-
+from app.core.config import settings
 
 def create_credentials(token="test-token"):
     """Create mock HTTP Bearer credentials."""
@@ -415,3 +416,34 @@ def test_get_current_user_database_lookup_uses_user_id(monkeypatch):
     mock_db.query.return_value.filter.assert_called_once()
 
 
+def test_get_current_user_rejects_token_with_invalid_signature():
+    """A correctly structured JWT with an invalid signature returns 401."""
+
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "username": "auth_test_user",
+            "role_id": 2,
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        "a-different-test-secret-key-long-enough",
+        algorithm=settings.jwt_algorithm,
+    )
+
+    mock_db = create_mock_db()
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(
+            credentials=create_credentials(token),
+            db=mock_db,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == (
+        "Invalid or missing authentication token."
+    )
+    assert exc_info.value.headers["WWW-Authenticate"] == "Bearer"
+
+    mock_db.query.assert_not_called()
+
+    

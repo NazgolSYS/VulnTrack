@@ -1195,6 +1195,31 @@ def test_unauthenticated_user_cannot_access_protected_endpoints(
     assert response.status_code == 401
 
 
+@pytest.mark.parametrize(
+    ("method", "endpoint"),
+    [
+        ("post", "/findings/"),
+        ("patch", "/findings/1"),
+        ("post", "/remediation-tasks/"),
+        ("put", "/remediation-tasks/1"),
+        ("post", "/scans/"),
+        ("put", "/scans/1"),
+        ("post", "/risk-assessments/"),
+    ],
+)
+def test_unauthenticated_user_cannot_perform_protected_write_operations(
+    client,
+    method,
+    endpoint,
+):
+    """Protected write operations require authentication."""
+
+    response = getattr(client, method)(endpoint, json={})
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
 # Comments RBAC tests
 @pytest.mark.parametrize(
     "role_name",
@@ -1350,8 +1375,6 @@ def test_security_analyst_cannot_delete_role(client):
     response = client.delete("/roles/999999")
 
     assert response.status_code == 403
-
-
 
 
 # Software RBAC tests
@@ -1588,7 +1611,6 @@ def test_viewer_cannot_delete_asset_software(client):
     response = client.delete("/asset-software/1")
 
     assert response.status_code == 403
-
 
 
 # Audit Logs RBAC tests

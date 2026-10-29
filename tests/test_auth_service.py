@@ -3,8 +3,9 @@ from datetime import datetime, timedelta, timezone
 
 import jwt
 import pytest
+from pydantic import ValidationError
 
-from app.core.config import settings
+from app.core.config import Settings, settings
 from app.services.auth_service import (
     create_access_token,
     decode_access_token,
@@ -177,4 +178,29 @@ def test_decode_token_with_non_string_subject():
     with pytest.raises(jwt.InvalidTokenError):
         decode_access_token(token)
 
+
+def test_settings_reject_missing_jwt_secret(monkeypatch):
+    """JWT secret configuration is required when no secret is provided."""
+
+    monkeypatch.delenv("JWT_SECRET_KEY", raising=False)
+
+    with pytest.raises(ValidationError):
+        Settings(_env_file=None)
+
+
+@pytest.mark.parametrize(
+    "expiration_minutes",
+    [0, -1],
+)
+def test_settings_reject_nonpositive_token_expiration(
+    expiration_minutes,
+):
+    """Token expiration must be a positive number of minutes."""
+
+    with pytest.raises(ValidationError):
+        Settings(
+            jwt_secret_key="test-secret-key",
+            access_token_expire_minutes=expiration_minutes,
+            _env_file=None,
+        )
 

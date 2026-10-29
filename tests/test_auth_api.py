@@ -155,3 +155,80 @@ def test_login_inactive_user(client, monkeypatch):
     )
     verify_password_mock.assert_not_called()
 
+
+def test_login_missing_password_returns_validation_error(client):
+    """Login requests without a password are rejected."""
+
+    response = client.post(
+        "/auth/login",
+        json={"username": "test_user"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_missing_username_returns_validation_error(client):
+    """Login requests without a username are rejected."""
+
+    response = client.post(
+        "/auth/login",
+        json={"password": "test-password"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_non_string_password_returns_validation_error(client):
+    """Login requests with a non-string password are rejected."""
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": "test_user",
+            "password": 12345,
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_empty_username_returns_422(client):
+    """An empty username is rejected by request validation."""
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": "",
+            "password": "test-password",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_empty_password_returns_422(client):
+    """An empty password is rejected by request validation."""
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": "test_user",
+            "password": "",
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_login_whitespace_only_username_returns_422(client):
+    """A username containing only whitespace is rejected."""
+
+    response = client.post(
+        "/auth/login",
+        json={
+            "username": "   ",
+            "password": "test-password",
+        },
+    )
+
+    assert response.status_code == 422

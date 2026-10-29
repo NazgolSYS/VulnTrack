@@ -204,3 +204,14 @@ def test_settings_reject_nonpositive_token_expiration(
             _env_file=None,
         )
 
+
+def test_settings_default_jwt_algorithm():
+    """JWT algorithm defaults to HS256."""
+
+    configured_settings = Settings(
+        jwt_secret_key="test-secret-key",
+        _env_file=None,
+    )
+
+    assert configured_settings.jwt_algorithm == "HS256"
+

@@ -219,3 +219,24 @@ def test_get_current_user_queries_user_by_id(monkeypatch):
     mock_db.query.assert_called_once_with(User)
     mock_db.query.return_value.filter.assert_called_once()
     mock_db.query.return_value.filter.return_value.first.assert_called_once()
+
+
+def test_get_current_user_malformed_token():
+    """A malformed JWT returns 401 without querying the database."""
+
+    mock_db = create_mock_db()
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(
+            credentials=create_credentials("not.a.valid.jwt"),
+            db=mock_db,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == (
+        "Invalid or missing authentication token."
+    )
+    assert exc_info.value.headers["WWW-Authenticate"] == "Bearer"
+
+    mock_db.query.assert_not_called()
+

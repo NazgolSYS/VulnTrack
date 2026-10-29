@@ -341,3 +341,77 @@ def test_require_viewer_rejects_unknown_role():
 
     assert exc_info.value.status_code == 403
     assert exc_info.value.detail == "Valid user role required."
+
+
+
+def test_get_current_user_expired_token(monkeypatch):
+    """An expired JWT returns 401 without querying the database."""
+
+    mock_db = create_mock_db()
+
+    def raise_expired_token(token):
+        raise jwt.ExpiredSignatureError("Token has expired")
+
+    monkeypatch.setattr(
+        "app.core.dependencies.decode_access_token",
+        raise_expired_token,
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(
+            credentials=create_credentials("expired-token"),
+            db=mock_db,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == (
+        "Invalid or missing authentication token."
+    )
+    assert exc_info.value.headers["WWW-Authenticate"] == "Bearer"
+    mock_db.query.assert_not_called()
+
+
+def test_get_current_user_non_numeric_subject(monkeypatch):
+    """A non-numeric JWT subject returns 401."""
+
+    mock_db = create_mock_db()
+
+    monkeypatch.setattr(
+        "app.core.dependencies.decode_access_token",
+        lambda token: {"sub": "user-abc"},
+    )
+
+    with pytest.raises(HTTPException) as exc_info:
+        get_current_user(
+            credentials=create_credentials(),
+            db=mock_db,
+        )
+
+    assert exc_info.value.status_code == 401
+    assert exc_info.value.detail == (
+        "Invalid or missing authentication token."
+    )
+    mock_db.query.assert_not_called()
+
+
+def test_get_current_user_database_lookup_uses_user_id(monkeypatch):
+    """A numeric subject is used to look up the corresponding user."""
+
+    user = create_test_user(user_id=42)
+    mock_db = create_mock_db(user)
+
+    monkeypatch.setattr(
+        "app.core.dependencies.decode_access_token",
+        lambda token: {"sub": "42"},
+    )
+
+    result = get_current_user(
+        credentials=create_credentials(),
+        db=mock_db,
+    )
+
+    assert result is user
+    mock_db.query.assert_called_once_with(User)
+    mock_db.query.return_value.filter.assert_called_once()
+
+

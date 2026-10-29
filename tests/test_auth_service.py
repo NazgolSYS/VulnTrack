@@ -123,3 +123,21 @@ def test_decode_token_without_subject():
     with pytest.raises(jwt.MissingRequiredClaimError):
         decode_access_token(token)
 
+
+def test_decode_token_with_unexpected_algorithm():
+    """A token signed with an unconfigured algorithm is rejected."""
+
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "username": "auth_test_user",
+            "role_id": 2,
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        "a-different-test-secret-key-long-enough-for-sha384",
+        algorithm="HS384",
+    )
+
+    with pytest.raises(jwt.InvalidAlgorithmError):
+        decode_access_token(token)
+

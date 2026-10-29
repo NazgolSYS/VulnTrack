@@ -141,3 +141,22 @@ def test_decode_token_with_unexpected_algorithm():
     with pytest.raises(jwt.InvalidAlgorithmError):
         decode_access_token(token)
 
+
+def test_decode_token_with_invalid_expiration():
+    """A token with an invalid expiration claim is rejected."""
+
+    token = jwt.encode(
+        {
+            "sub": "1",
+            "username": "auth_test_user",
+            "role_id": 2,
+            "exp": "not-a-valid-timestamp",
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_access_token(token)
+
+

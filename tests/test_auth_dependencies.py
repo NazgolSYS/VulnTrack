@@ -7,8 +7,14 @@ import pytest
 from fastapi import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials
 
-from app.core.dependencies import get_current_user
 from app.models import User
+from app.core.dependencies import (
+    get_current_user,
+    require_admin,
+    require_security_analyst,
+    require_viewer,
+)
+from app.core.roles import ADMINISTRATOR, SECURITY_ANALYST, VIEWER
 
 
 def create_credentials(token="test-token"):
@@ -31,6 +37,17 @@ def create_test_user(
         id=user_id,
         username=username,
         is_active=is_active,
+    )
+
+
+def create_test_user_with_role(role_name, user_id=1):
+    """Create a lightweight user with a specific role."""
+
+    return SimpleNamespace(
+        id=user_id,
+        username="auth_test_user",
+        is_active=True,
+        role=SimpleNamespace(name=role_name),
     )
 
 
@@ -240,3 +257,87 @@ def test_get_current_user_malformed_token():
 
     mock_db.query.assert_not_called()
 
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR],
+)
+def test_require_admin_allows_administrator(role_name):
+    """Administrators can access administrator-only resources."""
+
+    user = create_test_user_with_role(role_name)
+
+    result = require_admin(current_user=user)
+
+    assert result is user
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [SECURITY_ANALYST, VIEWER],
+)
+def test_require_admin_rejects_non_administrators(role_name):
+    """Security Analysts and Viewers cannot access administrator-only resources."""
+
+    user = create_test_user_with_role(role_name)
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_admin(current_user=user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Administrator role required."
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_require_security_analyst_allows_authorized_roles(role_name):
+    """Administrators and Security Analysts can access analyst resources."""
+
+    user = create_test_user_with_role(role_name)
+
+    result = require_security_analyst(current_user=user)
+
+    assert result is user
+
+
+def test_require_security_analyst_rejects_viewer():
+    """Viewers cannot access analyst-only resources."""
+
+    user = create_test_user_with_role(VIEWER)
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_security_analyst(current_user=user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == (
+        "Administrator or Security Analyst role required."
+    )
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_require_viewer_allows_all_defined_roles(role_name):
+    """All defined roles can access resources available to viewers."""
+
+    user = create_test_user_with_role(role_name)
+
+    result = require_viewer(current_user=user)
+
+    assert result is user
+
+
+def test_require_viewer_rejects_unknown_role():
+    """Users with an unrecognized role cannot access permitted resources."""
+
+    user = create_test_user_with_role("Unknown Role")
+
+    with pytest.raises(HTTPException) as exc_info:
+        require_viewer(current_user=user)
+
+    assert exc_info.value.status_code == 403
+    assert exc_info.value.detail == "Valid user role required."

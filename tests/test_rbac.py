@@ -757,6 +757,146 @@ def test_viewer_cannot_link_finding_to_vulnerability(client):
     assert response.status_code == 403
 
 
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_create_finding(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can create findings."""
+
+    set_test_user(role_name)
+
+    now = datetime.now(timezone.utc)
+    created_finding = SimpleNamespace(
+        id=1,
+        scan_id=1,
+        asset_id=1,
+        vulnerability_id=None,
+        title="RBAC Test Finding",
+        description="Finding created for an RBAC test.",
+        severity="high",
+        status="open",
+        evidence=None,
+        first_detected_at=now,
+        last_detected_at=now,
+        created_at=now,
+    )
+
+    monkeypatch.setattr(
+        finding_service,
+        "create_finding",
+        lambda db, finding_data: created_finding,
+    )
+
+    response = client.post(
+        "/findings/",
+        json={
+            "scan_id": 1,
+            "asset_id": 1,
+            "title": "RBAC Test Finding",
+            "severity": "high",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["id"] == 1
+    assert response.json()["title"] == "RBAC Test Finding"
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_update_finding(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can update findings."""
+
+    set_test_user(role_name)
+
+    now = datetime.now(timezone.utc)
+    updated_finding = SimpleNamespace(
+        id=1,
+        scan_id=1,
+        asset_id=1,
+        vulnerability_id=None,
+        title="Updated RBAC Test Finding",
+        description=None,
+        severity="high",
+        status="open",
+        evidence=None,
+        first_detected_at=now,
+        last_detected_at=now,
+        created_at=now,
+    )
+
+    monkeypatch.setattr(
+        finding_service,
+        "update_finding",
+        lambda db, finding_id, finding_data: updated_finding,
+    )
+
+    response = client.patch(
+        "/findings/1",
+        json={"title": "Updated RBAC Test Finding"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["title"] == "Updated RBAC Test Finding"
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_link_finding_to_vulnerability(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can link findings."""
+
+    set_test_user(role_name)
+
+    now = datetime.now(timezone.utc)
+    linked_finding = SimpleNamespace(
+        id=1,
+        scan_id=1,
+        asset_id=1,
+        vulnerability_id=42,
+        title="RBAC Test Finding",
+        description=None,
+        severity="high",
+        status="open",
+        evidence=None,
+        first_detected_at=now,
+        last_detected_at=now,
+        created_at=now,
+    )
+
+    monkeypatch.setattr(
+        finding_service,
+        "link_finding_to_vulnerability",
+        lambda db, finding_id, link_data: linked_finding,
+    )
+
+    response = client.patch(
+        "/findings/1/link-vulnerability",
+        json={"vulnerability_id": 42},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["vulnerability_id"] == 42
+
+
 # Add remediation task RBAC tests
 @pytest.mark.parametrize(
     "role_name",

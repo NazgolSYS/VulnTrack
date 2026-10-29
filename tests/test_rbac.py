@@ -1178,6 +1178,10 @@ def test_viewer_cannot_create_risk_assessment(client):
         "/findings/",
         "/remediation-tasks/",
         "/risk-assessments/vulnerability/1",
+        "/scans/",
+        "/assets/",
+        "/audit-logs/",
+        "/vulnerabilities/prioritized",
     ],
 )
 def test_unauthenticated_user_cannot_access_protected_endpoints(
@@ -1275,7 +1279,6 @@ def test_viewer_cannot_create_vulnerability_history(client):
     )
 
     assert response.status_code == 403
-
 
 
 # Roles RBAC tests
@@ -1671,7 +1674,6 @@ def test_admin_and_analyst_can_create_audit_log(
     assert response.json()["id"] == 1
     assert response.json()["action"] == "RBAC test"
     assert response.json()["entity_type"] == "vulnerability"
-
 
 
 def test_viewer_cannot_create_audit_log(client):

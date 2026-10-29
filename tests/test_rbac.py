@@ -819,6 +819,176 @@ def test_viewer_cannot_delete_remediation_task(client):
     assert response.status_code == 403
 
 
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_create_remediation_task(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can create remediation tasks."""
+
+    set_test_user(role_name)
+
+    created_task = SimpleNamespace(
+        id=1,
+        vulnerability_id=1,
+        title="RBAC Test Remediation",
+        description=None,
+        status="pending",
+        priority="medium",
+        assigned_to=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        "app.routers.remediation_tasks.validate_references",
+        lambda db, vulnerability_id, assigned_to: None,
+    )
+    monkeypatch.setattr(
+        remediation_task_service,
+        "create_remediation_task",
+        lambda db, task_data, commit=True: created_task,
+    )
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.post(
+        "/remediation-tasks/",
+        json={
+            "vulnerability_id": 1,
+            "title": "RBAC Test Remediation",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["id"] == 1
+    assert response.json()["title"] == "RBAC Test Remediation"
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_update_remediation_task(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can update remediation tasks."""
+
+    set_test_user(role_name)
+
+    existing_task = SimpleNamespace(
+        id=1,
+        vulnerability_id=1,
+        title="Original Remediation",
+        description=None,
+        status="pending",
+        priority="medium",
+        assigned_to=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    updated_task = SimpleNamespace(
+        id=1,
+        vulnerability_id=1,
+        title="Updated Remediation",
+        description=None,
+        status="pending",
+        priority="medium",
+        assigned_to=None,
+        due_date=None,
+        created_at=existing_task.created_at,
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        remediation_task_service,
+        "get_remediation_task",
+        lambda db, task_id: existing_task,
+    )
+    monkeypatch.setattr(
+        "app.routers.remediation_tasks.validate_references",
+        lambda db, vulnerability_id, assigned_to: None,
+    )
+    monkeypatch.setattr(
+        remediation_task_service,
+        "update_remediation_task",
+        lambda db, task, task_data, commit=True: updated_task,
+    )
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.put(
+        "/remediation-tasks/1",
+        json={"title": "Updated Remediation"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["title"] == "Updated Remediation"
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST],
+)
+def test_admin_and_analyst_can_delete_remediation_task(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """Administrators and Security Analysts can delete remediation tasks."""
+
+    set_test_user(role_name)
+
+    existing_task = SimpleNamespace(
+        id=1,
+        vulnerability_id=1,
+        title="Remediation to Delete",
+        description=None,
+        status="pending",
+        priority="medium",
+        assigned_to=None,
+        due_date=None,
+        created_at=datetime.now(timezone.utc),
+        updated_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        remediation_task_service,
+        "get_remediation_task",
+        lambda db, task_id: existing_task,
+    )
+    monkeypatch.setattr(
+        remediation_task_service,
+        "delete_remediation_task",
+        MagicMock(),
+    )
+    monkeypatch.setattr(
+        audit_log_service,
+        "record_audit_event",
+        MagicMock(),
+    )
+
+    response = client.delete("/remediation-tasks/1")
+
+    assert response.status_code == 204
+
+
 # Add risk assessment RBAC tests
 @pytest.mark.parametrize(
     "role_name",

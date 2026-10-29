@@ -160,3 +160,21 @@ def test_decode_token_with_invalid_expiration():
         decode_access_token(token)
 
 
+def test_decode_token_with_non_string_subject():
+    """A JWT with a non-string subject is rejected."""
+
+    token = jwt.encode(
+        {
+            "sub": 1,
+            "username": "auth_test_user",
+            "role_id": 2,
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=5),
+        },
+        settings.jwt_secret_key,
+        algorithm=settings.jwt_algorithm,
+    )
+
+    with pytest.raises(jwt.InvalidTokenError):
+        decode_access_token(token)
+
+

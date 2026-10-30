@@ -2397,14 +2397,13 @@ def test_all_roles_can_read_audit_logs(
     monkeypatch.setattr(
         audit_log_service,
         "get_audit_logs",
-        lambda db: [],
+        lambda db, skip=0, limit=100: [],
     )
 
     response = client.get("/audit-logs/")
 
     assert response.status_code == 200
     assert response.json() == []
-
 
 
 @pytest.mark.parametrize(
@@ -2417,7 +2416,6 @@ def test_admin_and_analyst_can_create_audit_log(
     role_name,
 ):
     """Administrators and Security Analysts can create audit logs."""
-
     set_test_user(role_name)
 
     created_audit_log = SimpleNamespace(
@@ -2431,10 +2429,16 @@ def test_admin_and_analyst_can_create_audit_log(
         created_at=datetime.now(timezone.utc),
     )
 
+    captured_audit_log_data = {}
+
+    def mock_create_audit_log(db, audit_log_data):
+        captured_audit_log_data["data"] = audit_log_data
+        return created_audit_log
+
     monkeypatch.setattr(
         audit_log_service,
         "create_audit_log",
-        lambda db, audit_log_data: created_audit_log,
+        mock_create_audit_log,
     )
 
     monkeypatch.setattr(
@@ -2445,7 +2449,7 @@ def test_admin_and_analyst_can_create_audit_log(
     response = client.post(
         "/audit-logs/",
         json={
-            "user_id": 1,
+            "user_id": 999,
             "action": "RBAC test",
             "entity_type": "vulnerability",
             "entity_id": 1,
@@ -2459,6 +2463,12 @@ def test_admin_and_analyst_can_create_audit_log(
         print("Response:", response.json())
 
     assert response.status_code == 201
+
+    # Verify that the authenticated user's ID overrides the submitted ID.
+    assert captured_audit_log_data["data"].user_id == 1
+
+    # Verify the returned audit log.
+    assert response.json()["user_id"] == 1
     assert response.json()["id"] == 1
     assert response.json()["action"] == "RBAC test"
     assert response.json()["entity_type"] == "vulnerability"
@@ -2503,6 +2513,88 @@ def test_unauthenticated_user_cannot_create_audit_log(client):
     assert response.status_code == 401
 
 
+def test_get_audit_logs_uses_default_pagination(
+    client,
+    monkeypatch,
+):
+    """Audit log listing uses skip=0 and limit=100 by default."""
+
+    set_test_user(ADMINISTRATOR)
+
+    captured = {}
+
+    def mock_get_audit_logs(db, skip=0, limit=100):
+        captured["skip"] = skip
+        captured["limit"] = limit
+        return []
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "get_audit_logs",
+        mock_get_audit_logs,
+    )
+
+    response = client.get("/audit-logs/")
+
+    assert response.status_code == 200
+    assert captured["skip"] == 0
+    assert captured["limit"] == 100
+
+
+def test_get_audit_logs_accepts_custom_pagination(
+    client,
+    monkeypatch,
+):
+    """Audit log listing accepts custom skip and limit values."""
+
+    set_test_user(ADMINISTRATOR)
+
+    captured = {}
+
+    def mock_get_audit_logs(db, skip=0, limit=100):
+        captured["skip"] = skip
+        captured["limit"] = limit
+        return []
+
+    monkeypatch.setattr(
+        audit_log_service,
+        "get_audit_logs",
+        mock_get_audit_logs,
+    )
+
+    response = client.get(
+        "/audit-logs/?skip=20&limit=50"
+    )
+
+    assert response.status_code == 200
+    assert captured["skip"] == 20
+    assert captured["limit"] == 50
+
+
+@pytest.mark.parametrize(
+    "query_string",
+    [
+        "?skip=-1",
+        "?limit=0",
+        "?limit=501",
+    ],
+)
+def test_get_audit_logs_rejects_invalid_pagination(
+    client,
+    query_string,
+):
+    """Invalid pagination values are rejected."""
+
+    set_test_user(ADMINISTRATOR)
+
+    response = client.get(
+        f"/audit-logs/{query_string}"
+    )
+
+    assert response.status_code == 422
+
+
+# Vulnerabilities RBAC tests
 def test_vulnerability_status_cannot_be_changed_through_put(client, monkeypatch):
     set_test_user(SECURITY_ANALYST)
 

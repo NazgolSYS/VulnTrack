@@ -19,10 +19,16 @@ def create_audit_log(
     return audit_log
 
 
-def get_audit_logs(db: Session):
+def get_audit_logs(
+    db: Session,
+    skip: int = 0,
+    limit: int = 100,
+):
     return (
         db.query(AuditLog)
         .order_by(AuditLog.id.desc())
+        .offset(skip)
+        .limit(limit)
         .all()
     )
 
@@ -39,7 +45,7 @@ def get_audit_log(
         .first()
     )
 
-
+# Unused
 def delete_audit_log(
     db: Session,
     audit_log: AuditLog,
@@ -72,4 +78,3 @@ def record_audit_event(
 
     return audit_log
 
- 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -51,6 +51,10 @@ def create_audit_log(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_security_analyst),
 ):
+    audit_log_data = audit_log_data.model_copy(
+        update={"user_id": current_user.id}
+    )
+
     validate_user(
         db,
         audit_log_data.user_id,
@@ -76,10 +80,16 @@ def create_audit_log(
     response_model=list[AuditLogResponse],
 )
 def get_audit_logs(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    return audit_log_service.get_audit_logs(db)
+    return audit_log_service.get_audit_logs(
+        db,
+        skip,
+        limit,
+    )
 
 
 @router.get(

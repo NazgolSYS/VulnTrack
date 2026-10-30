@@ -1,11 +1,13 @@
 
 from datetime import datetime, timezone
+
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 import sys
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.exc import IntegrityError
 
 from app.main import app
 from app.database import get_db
@@ -80,6 +82,25 @@ def test_all_roles_can_read_assets(client, monkeypatch, role_name):
     assert response.json() == []
 
 
+def test_unauthenticated_user_cannot_read_assets(client):
+    """Requests without a bearer token must be rejected."""
+
+    response = client.get("/assets/")
+
+    assert response.status_code == 401
+    assert response.headers.get("www-authenticate") == "Bearer"
+
+
+def test_viewer_cannot_delete_assets(client):
+    """A Viewer cannot perform an asset-management operation."""
+
+    set_test_user(VIEWER)
+
+    response = client.delete("/assets/999999")
+
+    assert response.status_code == 403
+
+# Add 
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST],
@@ -455,23 +476,124 @@ def test_administrator_can_update_user_role(client, monkeypatch):
     assert response.json()["role_id"] == 4
 
 
-def test_unauthenticated_user_cannot_read_assets(client):
-    """Requests without a bearer token must be rejected."""
+@pytest.mark.parametrize(
+    "role_name",
+    [SECURITY_ANALYST, VIEWER],
+)
+def test_non_admin_users_cannot_delete_users(client, role_name):
+    """Only Administrators can delete users."""
 
-    response = client.get("/assets/")
+    set_test_user(role_name)
 
-    assert response.status_code == 401
-    assert response.headers.get("www-authenticate") == "Bearer"
-
-
-def test_viewer_cannot_delete_assets(client):
-    """A Viewer cannot perform an asset-management operation."""
-
-    set_test_user(VIEWER)
-
-    response = client.delete("/assets/999999")
+    response = client.delete("/users/999999")
 
     assert response.status_code == 403
+
+
+def test_unauthenticated_user_cannot_delete_users(client):
+    """Deleting users requires authentication."""
+
+    response = client.delete("/users/999999")
+
+    assert response.status_code == 401
+
+
+def test_administrator_can_delete_user(client, monkeypatch):
+    """An Administrator can delete an existing user."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    delete_called = []
+
+    def mock_delete_user(db, user):
+        delete_called.append(user)
+
+    monkeypatch.setattr(
+        user_service,
+        "delete_user",
+        mock_delete_user,
+    )
+
+    response = client.delete("/users/1")
+
+    assert response.status_code == 204
+    assert response.content == b""
+    assert delete_called == [existing_user]
+
+
+def test_administrator_cannot_delete_nonexistent_user(client, monkeypatch):
+    """An Administrator receives 404 when the user does not exist."""
+
+    set_test_user(ADMINISTRATOR)
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: None,
+    )
+
+    response = client.delete("/users/999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found."
+
+
+def test_administrator_cannot_delete_referenced_user(client, monkeypatch):
+    """An Administrator receives 409 when other records reference the user."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    def mock_delete_user(db, user):
+        raise IntegrityError(
+            "DELETE statement",
+            {},
+            Exception("Foreign key constraint violation"),
+        )
+
+    monkeypatch.setattr(
+        user_service,
+        "delete_user",
+        mock_delete_user,
+    )
+
+    response = client.delete("/users/1")
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == (
+        "User cannot be deleted because other records reference it."
+    )
+
+    sys.modules[__name__]._test_mock_db.rollback.assert_called_once()
 
 
 # Add vulnerability RBAC tests

@@ -2,6 +2,7 @@
 from datetime import datetime, timezone
 from types import SimpleNamespace
 from unittest.mock import MagicMock
+import sys
 
 import pytest
 from fastapi.testclient import TestClient
@@ -109,6 +110,349 @@ def test_viewer_cannot_access_users(client, monkeypatch):
     response = client.get("/users/")
 
     assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [SECURITY_ANALYST, VIEWER],
+)
+def test_non_admin_users_cannot_update_users(client, role_name):
+    """Only Administrators can update users."""
+
+    set_test_user(role_name)
+
+    response = client.put(
+        "/users/1",
+        json={"username": "updated_username"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_unauthenticated_user_cannot_update_users(client):
+    """Updating users requires authentication."""
+
+    response = client.put(
+        "/users/1",
+        json={"username": "updated_username"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_administrator_can_update_user(client, monkeypatch):
+    """An Administrator can update a user's username."""
+
+    set_test_user(ADMINISTRATOR)
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    updated_user = SimpleNamespace(
+        id=1,
+        username="updated_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=existing_user.created_at,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "update_user",
+        lambda db, user, user_data: updated_user,
+    )
+
+    response = client.put(
+        "/users/1",
+        json={"username": "updated_username"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["username"] == "updated_username"
+    assert "hashed_password" not in response.json()
+
+def test_administrator_cannot_update_nonexistent_user(client, monkeypatch):
+    """An Administrator receives 404 when the user does not exist."""
+
+    set_test_user(ADMINISTRATOR)
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: None,
+    )
+
+    response = client.put(
+        "/users/999",
+        json={"username": "updated_username"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "User not found."
+
+
+def test_administrator_cannot_assign_nonexistent_role(client, monkeypatch):
+    """An Administrator cannot assign a role that does not exist."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    response = client.put(
+        "/users/1",
+        json={"role_id": 999},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Role not found."
+
+
+def test_administrator_cannot_assign_duplicate_username(client, monkeypatch):
+    """An Administrator cannot assign another user's username."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    duplicate_user = SimpleNamespace(
+        id=2,
+        username="duplicate_username",
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = (
+        duplicate_user
+    )
+
+    response = client.put(
+        "/users/1",
+        json={"username": "duplicate_username"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Username already exists."
+
+
+def test_administrator_cannot_assign_duplicate_email(client, monkeypatch):
+    """An Administrator cannot assign another user's email address."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    duplicate_user = SimpleNamespace(
+        id=2,
+        email="duplicate@example.com",
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = (
+        duplicate_user
+    )
+
+    response = client.put(
+        "/users/1",
+        json={"email": "duplicate@example.com"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Email already exists."
+
+
+def test_administrator_can_deactivate_user(client, monkeypatch):
+    """An Administrator can deactivate a user."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    updated_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=False,
+        created_at=existing_user.created_at,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "update_user",
+        lambda db, user, user_data: updated_user,
+    )
+
+    response = client.put(
+        "/users/1",
+        json={"is_active": False},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["is_active"] is False
+
+
+def test_administrator_can_update_user_email(client, monkeypatch):
+    """An Administrator can update a user's email address."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    updated_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="updated@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=existing_user.created_at,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "update_user",
+        lambda db, user, user_data: updated_user,
+    )
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    response = client.put(
+        "/users/1",
+        json={"email": "updated@example.com"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["email"] == "updated@example.com"
+
+
+def test_administrator_can_update_user_role(client, monkeypatch):
+    """An Administrator can assign a valid role to a user."""
+
+    set_test_user(ADMINISTRATOR)
+
+    existing_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=3,
+        is_active=True,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    updated_user = SimpleNamespace(
+        id=1,
+        username="existing_username",
+        email="existing@example.com",
+        role_id=4,
+        is_active=True,
+        created_at=existing_user.created_at,
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "get_user",
+        lambda db, user_id: existing_user,
+    )
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = (
+        SimpleNamespace(id=4, name=VIEWER)
+    )
+
+    monkeypatch.setattr(
+        user_service,
+        "update_user",
+        lambda db, user, user_data: updated_user,
+    )
+
+    response = client.put(
+        "/users/1",
+        json={"role_id": 4},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["role_id"] == 4
 
 
 def test_unauthenticated_user_cannot_read_assets(client):

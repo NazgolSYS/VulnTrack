@@ -48,20 +48,23 @@ def test_login_success(client, monkeypatch):
     """Valid credentials return a bearer access token."""
 
     mock_user = make_test_user()
-    configure_mock_user(
-        client.app.dependency_overrides[get_db](),
-        mock_user,
+    mock_db = client.app.dependency_overrides[get_db]()
+    configure_mock_user(mock_db, mock_user)
+
+    verify_password_mock = MagicMock(return_value=True)
+    create_access_token_mock = MagicMock(
+        return_value="test-access-token"
     )
 
     monkeypatch.setattr(
         auth_router,
         "verify_password",
-        lambda password, hashed_password: True,
+        verify_password_mock,
     )
     monkeypatch.setattr(
         auth_router,
         "create_access_token",
-        lambda user_id, username, role_id: "test-access-token",
+        create_access_token_mock,
     )
 
     response = client.post(
@@ -78,6 +81,17 @@ def test_login_success(client, monkeypatch):
         "token_type": "bearer",
     }
 
+    verify_password_mock.assert_called_once_with(
+        "correct-password",
+        "test_password_hash",
+    )
+
+    create_access_token_mock.assert_called_once_with(
+        user_id=1,
+        username="test_user",
+        role_id=2,
+    )
+    
 
 def test_login_unknown_username(client):
     """Unknown usernames receive a generic authentication error."""

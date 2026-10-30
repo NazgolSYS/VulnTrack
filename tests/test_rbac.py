@@ -52,7 +52,7 @@ def client(monkeypatch):
     app.dependency_overrides.clear()
 
 
-# Add user and assets RBAC tests
+# User and assets RBAC tests
 def set_test_user(role_name):
     """Override authentication with a user having the requested role."""
 
@@ -100,7 +100,9 @@ def test_viewer_cannot_delete_assets(client):
 
     assert response.status_code == 403
 
-# Add 
+# Users RBAC tests
+
+# User retrieval RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST],
@@ -133,6 +135,7 @@ def test_viewer_cannot_access_users(client, monkeypatch):
     assert response.status_code == 403
 
 
+# User update RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [SECURITY_ANALYST, VIEWER],
@@ -476,6 +479,7 @@ def test_administrator_can_update_user_role(client, monkeypatch):
     assert response.json()["role_id"] == 4
 
 
+# User deletion RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [SECURITY_ANALYST, VIEWER],
@@ -596,7 +600,7 @@ def test_administrator_cannot_delete_referenced_user(client, monkeypatch):
     sys.modules[__name__]._test_mock_db.rollback.assert_called_once()
 
 
-# Add vulnerability RBAC tests
+# Vulnerability RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
@@ -1158,7 +1162,7 @@ def test_viewer_cannot_change_vulnerability_status(client):
     assert response.status_code == 403
 
 
-# Add findings RBAC tests
+# Findings RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
@@ -1363,7 +1367,7 @@ def test_admin_and_analyst_can_link_finding_to_vulnerability(
     assert response.json()["vulnerability_id"] == 42
 
 
-# Add remediation task RBAC tests
+# Remediation task RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
@@ -1595,7 +1599,7 @@ def test_admin_and_analyst_can_delete_remediation_task(
     assert response.status_code == 204
 
 
-# Add risk assessment RBAC tests
+# Risk assessment RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
@@ -1636,7 +1640,7 @@ def test_viewer_cannot_create_risk_assessment(client):
     assert response.status_code == 403
 
 
-# Add unauthenticated tests
+# Unauthenticated tests
 @pytest.mark.parametrize(
     "endpoint",
     [

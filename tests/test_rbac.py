@@ -1777,7 +1777,7 @@ def test_viewer_cannot_create_vulnerability_history(client):
 
 
 # Roles RBAC tests
-
+# Role retrieval RBAC tests
 @pytest.mark.parametrize(
     "role_name",
     [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
@@ -1803,6 +1803,74 @@ def test_all_roles_can_read_roles(
     assert response.json() == []
 
 
+def test_unauthenticated_user_cannot_read_roles(client):
+    """Unauthenticated users cannot list roles."""
+
+    response = client.get("/roles/")
+
+    assert response.status_code == 401
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_authenticated_roles_can_access_nonexistent_role(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can access the individual role endpoint."""
+
+    set_test_user(role_name)
+
+    monkeypatch.setattr(
+        role_service,
+        "get_role",
+        lambda db, role_id: None,
+    )
+
+    response = client.get("/roles/999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Role not found."
+
+
+@pytest.mark.parametrize(
+    "role_name",
+    [ADMINISTRATOR, SECURITY_ANALYST, VIEWER],
+)
+def test_all_authenticated_roles_can_read_existing_role(
+    client,
+    monkeypatch,
+    role_name,
+):
+    """All authenticated roles can retrieve an existing role."""
+
+    set_test_user(role_name)
+
+    test_role = SimpleNamespace(
+        id=1,
+        name="Security Analyst",
+        description="Handles security assessments.",
+        created_at=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(
+        role_service,
+        "get_role",
+        lambda db, role_id: test_role if role_id == 1 else None,
+    )
+
+    response = client.get("/roles/1")
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["name"] == "Security Analyst"
+    assert response.json()["description"] == "Handles security assessments."
+
+
+# Role creation tests
 @pytest.mark.parametrize(
     "role_name",
     [SECURITY_ANALYST, VIEWER],
@@ -1824,6 +1892,80 @@ def test_non_admin_users_cannot_create_roles(
     assert response.status_code == 403
 
 
+def test_administrator_can_create_role(client, monkeypatch):
+    """An Administrator can create a new role."""
+
+    set_test_user(ADMINISTRATOR)
+
+    created_role = SimpleNamespace(
+        id=10,
+        name="RBAC Test Role",
+        description="Role created for RBAC testing.",
+        created_at=datetime.now(timezone.utc),
+    )
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = None
+
+    monkeypatch.setattr(
+        role_service,
+        "create_role",
+        lambda db, role_data: created_role,
+    )
+
+    response = client.post(
+        "/roles/",
+        json={
+            "name": "RBAC Test Role",
+            "description": "Role created for RBAC testing.",
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json()["id"] == 10
+    assert response.json()["name"] == "RBAC Test Role"
+    assert response.json()["description"] == "Role created for RBAC testing."
+
+
+def test_administrator_cannot_create_duplicate_role(client):
+    """An Administrator cannot create a role with an existing name."""
+
+    set_test_user(ADMINISTRATOR)
+
+    sys.modules[__name__]._test_mock_db.query.return_value.filter.return_value.first.return_value = (
+        SimpleNamespace(
+            id=1,
+            name="Security Analyst",
+            description="Existing role.",
+        )
+    )
+
+    response = client.post(
+        "/roles/",
+        json={
+            "name": "Security Analyst",
+            "description": "Duplicate role.",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "A role with this name already exists."
+
+
+def test_unauthenticated_user_cannot_create_role(client):
+    """Unauthenticated users cannot create roles."""
+
+    response = client.post(
+        "/roles/",
+        json={
+            "name": "Unauthenticated Test Role",
+            "description": "Test role.",
+        },
+    )
+
+    assert response.status_code == 401
+
+
+# Role update tests
 def test_viewer_cannot_update_role(client):
     """A Viewer cannot update roles."""
 
@@ -1837,6 +1979,96 @@ def test_viewer_cannot_update_role(client):
     assert response.status_code == 403
 
 
+def test_security_analyst_cannot_update_role(client):
+    """A Security Analyst cannot update roles."""
+
+    set_test_user(SECURITY_ANALYST)
+
+    response = client.put(
+        "/roles/999999",
+        json={"name": "Updated Test Role"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_unauthenticated_user_cannot_update_role(client):
+    """Unauthenticated users cannot update roles."""
+
+    response = client.put(
+        "/roles/999999",
+        json={"name": "Updated Test Role"},
+    )
+
+    assert response.status_code == 401
+
+
+def test_administrator_can_update_role(client, monkeypatch):
+    """An Administrator can update an existing role."""
+
+    set_test_user(ADMINISTRATOR)
+
+    test_role = SimpleNamespace(
+        id=1,
+        name="Security Analyst",
+        description="Original description.",
+        created_at=datetime.now(timezone.utc),
+    )
+
+    updated_role = SimpleNamespace(
+        id=1,
+        name="Senior Security Analyst",
+        description="Updated description.",
+        created_at=test_role.created_at,
+    )
+
+    monkeypatch.setattr(
+        role_service,
+        "get_role",
+        lambda db, role_id: test_role if role_id == 1 else None,
+    )
+
+    monkeypatch.setattr(
+        role_service,
+        "update_role",
+        lambda db, role, role_data: updated_role,
+    )
+
+    response = client.put(
+        "/roles/1",
+        json={
+            "name": "Senior Security Analyst",
+            "description": "Updated description.",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == 1
+    assert response.json()["name"] == "Senior Security Analyst"
+    assert response.json()["description"] == "Updated description."
+
+
+def test_administrator_cannot_update_nonexistent_role(client, monkeypatch):
+    """An Administrator cannot update a role that does not exist."""
+
+    set_test_user(ADMINISTRATOR)
+
+    monkeypatch.setattr(
+        role_service,
+        "get_role",
+        lambda db, role_id: None,
+    )
+
+    response = client.put(
+        "/roles/999999",
+        json={"name": "Updated Test Role"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Role not found."
+
+
+# role deletion tests
 def test_security_analyst_cannot_delete_role(client):
     """A Security Analyst cannot delete roles."""
 
@@ -1845,6 +2077,70 @@ def test_security_analyst_cannot_delete_role(client):
     response = client.delete("/roles/999999")
 
     assert response.status_code == 403
+
+
+def test_viewer_cannot_delete_role(client):
+    """A Viewer cannot delete roles."""
+
+    set_test_user(VIEWER)
+
+    response = client.delete("/roles/999999")
+
+    assert response.status_code == 403
+
+
+def test_unauthenticated_user_cannot_delete_role(client):
+    """Unauthenticated users cannot delete roles."""
+
+    response = client.delete("/roles/999999")
+
+    assert response.status_code == 401
+
+
+def test_administrator_can_delete_role(client, monkeypatch):
+    """An Administrator can delete an existing role."""
+
+    set_test_user(ADMINISTRATOR)
+
+    test_role = SimpleNamespace(
+        id=1,
+        name="RBAC Test Role",
+        description="Role created for deletion testing.",
+    )
+
+    monkeypatch.setattr(
+        role_service,
+        "get_role",
+        lambda db, role_id: test_role if role_id == 1 else None,
+    )
+
+    monkeypatch.setattr(
+        role_service,
+        "delete_role",
+        lambda db, role: None,
+    )
+
+    response = client.delete("/roles/1")
+
+    assert response.status_code == 204
+    assert response.content == b""
+
+
+def test_administrator_cannot_delete_nonexistent_role(client, monkeypatch):
+    """An Administrator cannot delete a role that does not exist."""
+
+    set_test_user(ADMINISTRATOR)
+
+    monkeypatch.setattr(
+        role_service,
+        "get_role",
+        lambda db, role_id: None,
+    )
+
+    response = client.delete("/roles/999999")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Role not found."
 
 
 # Software RBAC tests

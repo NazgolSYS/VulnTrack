@@ -191,8 +191,22 @@ def create_finding(
             )
 
             if vulnerability is not None:
-                if vulnerability.status.strip().lower() == "resolved":
+                old_status = (vulnerability.status or "").strip().lower()
+
+                if old_status == "resolved":
                     vulnerability.status = "open"
+
+                    history = models.VulnerabilityHistory(
+                        vulnerability_id=vulnerability.id,
+                        changed_by=None,
+                        old_status="resolved",
+                        new_status="open",
+                        comment=(
+                            "Automatically reopened because a new finding "
+                            "was linked to this vulnerability."
+                        ),
+                    )
+                    db.add(history)
 
                 if (
                     vulnerability.discovered_at is None

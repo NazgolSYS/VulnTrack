@@ -3,8 +3,8 @@ uvicorn
 sqlalchemy
 psycopg2-binary
 python-dotenv
-pydantic
+pydantic[email]
 alembic
-pwdlib
+pwdlib[argon2]
 PyJWT
 pydantic-settings
